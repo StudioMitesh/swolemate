@@ -1,0 +1,6 @@
+Flask==2.2.3
+Flask-PyMongo==2.3.0
+opencv-python==4.7.0.72
+numpy==1.24.0
+tensorflow==2.10.0   # If you're using deep learning for feedback
+pillow==9.4.0        # For image processing
