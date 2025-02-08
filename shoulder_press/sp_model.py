@@ -162,3 +162,6 @@ results = model.evaluate(
     batch_size=32
 )
 print("Test results:", results)
+
+# save the model
+model.save("shoulder_press_model.keras")

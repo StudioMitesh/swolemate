@@ -139,8 +139,15 @@
                 <h3 class="text-lg font-semibold text-[#1a1a2e]">Choose an exercise:</h3>
                 <select id="exerciseSelect" class="bg-gray-800 border-2 border-gray-600 text-white p-3 rounded-lg shadow-md">
                     <option value="shoulder_press">Shoulder Press</option>
-                    <option value="arm_bicep_curls">Squats</option>
+                    <option value="squats">Squats</option>
                 </select>
+            </div>
+
+            <div id="resultContainer" class="hidden">
+                <p id="resultText" class="text-green-500 text-lg font-semibold"></p>
+            </div>
+            <div id="errorContainer" class="hidden">
+                <p id="errorText" class="text-red-500 text-sm"></p>
             </div>
         </div>
     </div>
@@ -184,13 +191,14 @@
                     };
 
                     mediaRecorder.onstop = () => {
-                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                        const blob = new Blob(recordedChunks, { type: 'video/mp4' });
                         recordedChunks = [];
                         savedVideo = blob;
                         console.log('Video saved as variable', savedVideo);
                     };
 
                     mediaRecorder.start();
+                    console.log('Recording started');
                     startButton.disabled = true;
                     stopButton.disabled = false;
                     saveButton.disabled = false;
@@ -206,20 +214,53 @@
                 videoStream.getTracks().forEach(track => track.stop());
                 videoElement.srcObject = null;
                 mediaRecorder.stop();
+                console.log('Recording stopped');
                 startButton.disabled = false;
                 stopButton.disabled = true;
             }
         });
 
-        // Save the recorded video as a variable
+        // Save the video
         saveButton.addEventListener('click', function() {
-            if (savedVideo) {
-                console.log('Video saved as a variable:', savedVideo);
-                chatWindow.style.display = 'block'; // Show chat window
-            } else {
-                console.log('No video to save.');
-            }
-        });
+        if (savedVideo) {
+            console.log('Sending video to server...');
+            const formData = new FormData();
+            formData.append('video', savedVideo, 'video.mp4');
+            console.log(formData.get('video'));
+            fetch('/upload_video', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to upload video');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("The data", data);
+                const resultText = document.getElementById('resultText');
+                if (data.prediction === 1) {
+                    resultText.textContent = 'Good Shoulder Press';
+                } else {
+                    resultText.textContent = 'Bad Shoulder Press';
+                }
+                const resultContainer = document.getElementById('resultContainer');
+                resultContainer.classList.remove('hidden');
+                const errorText = document.getElementById('errorText');
+                errorText.textContent = `Error Metric: ${data.error_metric.toFixed(3)}`;
+                const errorContainer = document.getElementById('errorContainer');
+                errorContainer.classList.remove('hidden');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+            console.log('Video sent to server.');
+            chatWindow.style.display = 'block'; // Show chat window
+        } else {
+            console.log('No video to save.');
+        }
+    });
 
         // Handle sending messages in the chat
         sendMessageButton.addEventListener('click', function() {
