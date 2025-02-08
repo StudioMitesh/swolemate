@@ -7,7 +7,7 @@ mp_poses = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 pose = mp_poses.Pose(static_image_mode=False)
 
-def extract_poses(video, label, output):
+def extract_poses(video, label):
     cap = cv2.VideoCapture(video)
     data = []
     frame_count = 0
@@ -38,8 +38,6 @@ def extract_poses(video, label, output):
     cols.append("label")
     
     df = pd.DataFrame(data, columns=cols)
-    df.to_csv(output, mode='a', header=not os.path.exists(output), index=False)
-
     return df
 
 def process_videos_in_folder(folder, label, output_csv):
