@@ -4,43 +4,172 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SwoleMate</title>
+    <!-- Add Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts for better typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+
     <style>
-        #videoElement {
-            width: 50%;
-            height: auto;
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        #sidebar {
+            height: 100%;
+            width: 220px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: #1a1a2e;
+            padding-top: 20px;
+            color: white;
+            box-shadow: 4px 0 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #sidebar h2 {
+            padding-left: 10px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            padding-top: 10px;
+        }
+
+        #sidebar a {
+            padding: 25px 35px;
+            text-decoration: none;
+            font-size: 1.125rem;
+            color: white;
+            display: block;
+            transition: background-color 0.3s ease;
+        }
+
+        #sidebar a:hover {
+            background-color: #575757;
+        }
+
+        #mainWrapper {
+            margin-left: 240px;
+        }
+
+        .bg-main-gradient {
+            background-color:#f7f2eb;
+        }
+
+        .btn {
+            font-weight: 600;
+            padding: 12px 24px;
+            border-radius: 8px;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+
+        .text-large {
+            font-size: 1.875rem;
+            font-weight: 600;
+        }
+
+        /* Chat styles */
+        #chatWindow {
+            display: none;
+            position: fixed;
+            bottom: 90px;
+            right: 100px;
+            background-color: white;
+            width: 350px;
+            height: 600px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            color: black;
+        }
+
+        #chatWindow .messages {
+            height: 320px;
+            overflow-y: scroll;
+            margin-bottom: 1px;
+        }
+
+        #chatWindow textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            margin-bottom: 1px;
+            resize: none;
+        }
+
+        #chatWindow button {
+            width: 100%;
+            background-color: #4CAF50;
+            color: white;
+            padding: 1px;
+            border-radius: 8px;
+            border: none;
         }
     </style>
 </head>
-<body>
-    <h1>Welcome to SwoleMate!</h1>
-    
-    <div>
-        <video id="videoElement" autoplay></video>
+<body class="bg-main-gradient text-white">
+
+    <!-- Sidebar -->
+    <div id="sidebar" class="p-6">
+        <h2>SwoleMate</h2>
+        <a href="#">Profile</a>
+        <a href="#">Rewards</a>
+        <a href="#" id="openChatButton">Chat</a>
     </div>
 
-    <div>
-        <button id="startButton">Start Video</button>
-        <button id="stopButton" disabled>Stop Video</button>
-        <button id="saveButton" disabled>Save Video</button> <!-- Save Video button -->
+    <div id="mainWrapper" class="p-8">
+        <div id="mainContent" class="space-y-6">
+            <h1 class="text-4xl font-extrabold text-[#1a1a2e]">Welcome to SwoleMate</h1>
+
+            <div>
+                <video id="videoElement" autoplay class="w-3/5 rounded-lg shadow-lg"></video>
+            </div>
+
+            <div class="flex space-x-4">
+                <button id="startButton" class="bg-green-500 text-white btn">Start Video</button>
+                <button id="stopButton" disabled class="bg-red-500 text-white btn">Stop Video</button>
+                <button id="saveButton" disabled class="bg-blue-500 text-white btn">Save Video</button>
+            </div>
+
+            <div>
+                <h3 class="text-lg font-semibold text-[#1a1a2e]">Choose an exercise:</h3>
+                <select id="exerciseSelect" class="bg-gray-800 border-2 border-gray-600 text-white p-3 rounded-lg shadow-md">
+                    <option value="shoulder_press">Shoulder Press</option>
+                    <option value="arm_bicep_curls">Squats</option>
+                </select>
+            </div>
+        </div>
     </div>
 
-    <div>
-        <h3>Choose an exercise:</h3>
-        <select id="exerciseSelect">
-            <option value="shoulder_press">Shoulder Press</option>
-            <option value="arm_bicep_curls">Arm Bicep Curls</option>
-        </select>
+    <!-- Chat Window -->
+    <div id="chatWindow">
+        <div class="messages" id="messages"></div>
+        <textarea id="chatInput" placeholder="Type a message..." rows="3"></textarea>
+        <button id="sendMessageButton">Send Message</button>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+        crossorigin="anonymous">
+    </script>
 
     <script>
         const videoElement = document.getElementById('videoElement');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const saveButton = document.getElementById('saveButton');
+        const chatWindow = document.getElementById('chatWindow');
+        const sendMessageButton = document.getElementById('sendMessageButton');
+        const chatInput = document.getElementById('chatInput');
+        const messages = document.getElementById('messages');
         let videoStream = null;
         let mediaRecorder = null;
-        let recordedChunks = []; // To store recorded video data
-        let savedVideo = null;  // Variable to store the video blob when saved
+        let recordedChunks = [];
+        let savedVideo = null;
 
         // Start the video and recording
         startButton.addEventListener('click', function() {
@@ -48,28 +177,20 @@
                 .then(stream => {
                     videoElement.srcObject = stream;
                     videoStream = stream;
-
-                    // Create a MediaRecorder instance to record the video
                     mediaRecorder = new MediaRecorder(stream);
 
-                    // When data is available, push it to the recordedChunks array
                     mediaRecorder.ondataavailable = event => {
                         recordedChunks.push(event.data);
                     };
 
-                    // When the recording stops, prepare the video for saving
                     mediaRecorder.onstop = () => {
                         const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                        recordedChunks = []; // Clear the recorded data for next time
-                        
-                        // Store the recorded video in the variable `savedVideo`
-                        savedVideo = blob;  // Save the video as a variable
-                        console.log('Video saved as variable', savedVideo); // Logs the saved video Blob
+                        recordedChunks = [];
+                        savedVideo = blob;
+                        console.log('Video saved as variable', savedVideo);
                     };
 
-                    mediaRecorder.start(); // Start recording
-
-                    // Disable the start button and enable stop/save buttons
+                    mediaRecorder.start();
                     startButton.disabled = true;
                     stopButton.disabled = false;
                     saveButton.disabled = false;
@@ -82,12 +203,11 @@
         // Stop the video and recording
         stopButton.addEventListener('click', function() {
             if (videoStream) {
-                const tracks = videoStream.getTracks();
-                tracks.forEach(track => track.stop()); // Stop all video tracks
-                videoElement.srcObject = null; // Remove video from element
-                mediaRecorder.stop(); // Stop recording
-                startButton.disabled = false; // Enable the start button
-                stopButton.disabled = true; // Disable the stop button
+                videoStream.getTracks().forEach(track => track.stop());
+                videoElement.srcObject = null;
+                mediaRecorder.stop();
+                startButton.disabled = false;
+                stopButton.disabled = true;
             }
         });
 
@@ -95,19 +215,35 @@
         saveButton.addEventListener('click', function() {
             if (savedVideo) {
                 console.log('Video saved as a variable:', savedVideo);
-                // You can now manipulate or store the `savedVideo` Blob variable as needed
-                // For example, you could upload it to a server or process it further in your app
+                chatWindow.style.display = 'block'; // Show chat window
             } else {
                 console.log('No video to save.');
             }
         });
 
-        // Handling the dropdown selection (logging the selected exercise)
+        // Handle sending messages in the chat
+        sendMessageButton.addEventListener('click', function() {
+            const message = chatInput.value.trim();
+            if (message) {
+                const newMessage = document.createElement('div');
+                newMessage.classList.add('message');
+                newMessage.textContent = message;
+                messages.appendChild(newMessage);
+                chatInput.value = ''; // Clear the input field
+                messages.scrollTop = messages.scrollHeight; // Scroll to the latest message
+            }
+        });
+
+        // Dropdown exercise selection
         const exerciseSelect = document.getElementById('exerciseSelect');
         exerciseSelect.addEventListener('change', function() {
-            const selectedExercise = exerciseSelect.value;
-            console.log('Selected exercise: ' + selectedExercise);
+            console.log('Selected exercise: ' + exerciseSelect.value);
+        });
+        document.getElementById('openChatButton').addEventListener('click', function(event) {
+            event.preventDefault(); // Prevent default link behavior
+            chatWindow.style.display = 'block'; // Show chat window
         });
     </script>
+
 </body>
 </html>
