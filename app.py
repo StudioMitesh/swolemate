@@ -53,12 +53,18 @@ def upload_video():
         
         try:
             print("Predicting...")
-            predictions = model.predict(frames)
-            predicted_class = np.argmax(predictions, axis=1)
-            print("Predicted class:", predicted_class)
+            class_pred, error_pred = model.predict(frames)
+            print("predictions done!")
+            class_results = (class_pred > 0.5).astype(int)
+            error_results = np.argmax(error_pred, axis=1)
+            print("Predicted class:", class_results)
+            results =  {
+                'form_classification': class_results,
+                'error_types': error_results
+            }
             return jsonify({
-                'prediction': int(predicted_class[0]),
-                'message': 'Video processed successfully'
+                'classification': results['form_classification'].tolist(),
+                'error_types': results['error_types'].tolist()
             })
         except Exception as e:
             print(f"Error occurred in model prediction: {e}")
