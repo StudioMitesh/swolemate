@@ -1,6 +1,7 @@
 import mediapipe as mp
 import cv2
 import pandas as pd
+from frame_standardize import standardize_frame
 
 def extract_poses(video, label):
     mp_poses = mp.solutions.pose
@@ -16,7 +17,8 @@ def extract_poses(video, label):
             break
 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(frame)
+        standardized_frame = standardize_frame(frame)
+        results = pose.process(standardized_frame)
 
         if results.pose_landmarks:
             landmarks = []

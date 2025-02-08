@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 import numpy as np
 import tensorflow as tf
 import cv2
@@ -11,6 +11,7 @@ from pose_detector import extract_poses
 app = Flask(__name__)
 
 UPLOAD_FOLDER = "uploads"
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 model = load_model('shoulder_press_model.keras')
@@ -38,26 +39,33 @@ def upload_video():
             return jsonify({'error': 'No video file provided'}), 400
 
         video_file = request.files['video']
-        video_file.save(f'./uploads/{video_file.filename}')
-        video_path = f'./uploads/{video_file.filename}'
-        print(f"Video saved at: {video_path}")
+        if video_file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+        video_filename = os.path.join(app.config['UPLOAD_FOLDER'], 'recorded_video.mp4')
+        video_file.save(video_filename)
 
-        frames = process_video(video_path)
+        frames = process_video(video_filename)
         print("Frames shape:", frames.shape)
         
-        predictions = model.predict(frames)
-        predicted_class = np.argmax(predictions, axis=1)
-        
-        os.remove(video_path)
-
-
-        return jsonify({
-            'prediction': int(predicted_class[0]),
-            'message': 'Video processed successfully'
-        })
+        try:
+            predictions = model.predict(frames)
+            predicted_class = np.argmax(predictions, axis=1)
+            print("Predicted class:", predicted_class)
+            return jsonify({
+                'prediction': int(predicted_class[0]),
+                'message': 'Video processed successfully'
+            })
+        except Exception as e:
+            print(f"Error occurred in model prediction: {e}")
+            return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
     except Exception as e:
         print(f"Error occurred: {e}")
         return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/')
 def home():

@@ -177,90 +177,89 @@
         let mediaRecorder = null;
         let recordedChunks = [];
         let savedVideo = null;
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                videoElement.srcObject = stream;
+                mediaRecorder = new MediaRecorder(stream);
 
-        // Start the video and recording
-        startButton.addEventListener('click', function() {
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then(stream => {
-                    videoElement.srcObject = stream;
-                    videoStream = stream;
-                    mediaRecorder = new MediaRecorder(stream);
-
-                    mediaRecorder.ondataavailable = event => {
+                // When data is available, push it into the recordedChunks array
+                mediaRecorder.ondataavailable = function(event) {
+                    if (event.data.size > 0) {
                         recordedChunks.push(event.data);
-                    };
+                    }
+                };
 
-                    mediaRecorder.onstop = () => {
-                        const blob = new Blob(recordedChunks, { type: 'video/mp4' });
-                        recordedChunks = [];
-                        savedVideo = blob;
-                        console.log('Video saved as variable', savedVideo);
-                    };
+                // Once the recording is stopped, combine all the chunks into a Blob
+                mediaRecorder.onstop = function() {
+                    const blob = new Blob(recordedChunks, { type: 'video/mp4' });
+                    const videoURL = URL.createObjectURL(blob);
+                    console.log("Recording complete. Video URL:", videoURL);
+                    
+                    // You can now use the videoURL to preview the video in the browser
+                    const videoPreview = document.createElement('video');
+                    videoPreview.src = videoURL;
+                    videoPreview.controls = true;
+                    //document.body.appendChild(videoPreview);  // Optionally display the video
 
+                    // Prepare the video to be sent to the server (if needed)
+                    const formData = new FormData();
+                    formData.append('video', blob, 'recorded_video.mp4');
+                    
+                    fetch('/upload_video', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to upload video');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log("The data", data);
+                        const resultText = document.getElementById('resultText');
+                        if (data.prediction === 1) {
+                            resultText.textContent = 'Good Shoulder Press';
+                        } else {
+                            resultText.textContent = 'Bad Shoulder Press';
+                        }
+                        const resultContainer = document.getElementById('resultContainer');
+                        resultContainer.classList.remove('hidden');
+                        const errorText = document.getElementById('errorText');
+                        errorText.textContent = `Error Metric: ${data.error_metric.toFixed(3)}`;
+                        const errorContainer = document.getElementById('errorContainer');
+                        errorContainer.classList.remove('hidden');
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+                };
+
+                // Start recording when the user clicks the start button
+                startButton.addEventListener('click', () => {
+                    recordedChunks = []; // Clear previous recordings
                     mediaRecorder.start();
                     console.log('Recording started');
                     startButton.disabled = true;
                     stopButton.disabled = false;
                     saveButton.disabled = false;
-                })
-                .catch(err => {
-                    console.log('Error accessing camera: ' + err);
                 });
-        });
 
-        // Stop the video and recording
-        stopButton.addEventListener('click', function() {
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-                videoElement.srcObject = null;
-                mediaRecorder.stop();
-                console.log('Recording stopped');
-                startButton.disabled = false;
-                stopButton.disabled = true;
-            }
-        });
+                // Stop recording when the user clicks the stop button
+                stopButton.addEventListener('click', () => {
+                    mediaRecorder.stop();
+                    console.log('Recording stopped');
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
+                });
 
-        // Save the video
-        saveButton.addEventListener('click', function() {
-        if (savedVideo) {
-            console.log('Sending video to server...');
-            const formData = new FormData();
-            formData.append('video', savedVideo, 'video.mp4');
-            console.log(formData.get('video'));
-            fetch('/upload_video', {
-                method: 'POST',
-                body: formData
+                saveButton.addEventListener('click', () => {
+                    mediaRecorder.stop();
+                    console.log('Recording stopped');
+                });
             })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to upload video');
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log("The data", data);
-                const resultText = document.getElementById('resultText');
-                if (data.prediction === 1) {
-                    resultText.textContent = 'Good Shoulder Press';
-                } else {
-                    resultText.textContent = 'Bad Shoulder Press';
-                }
-                const resultContainer = document.getElementById('resultContainer');
-                resultContainer.classList.remove('hidden');
-                const errorText = document.getElementById('errorText');
-                errorText.textContent = `Error Metric: ${data.error_metric.toFixed(3)}`;
-                const errorContainer = document.getElementById('errorContainer');
-                errorContainer.classList.remove('hidden');
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-            console.log('Video sent to server.');
-            chatWindow.style.display = 'block'; // Show chat window
-        } else {
-            console.log('No video to save.');
-        }
-    });
+            .catch(err => console.error('Error accessing camera:', err));
+
 
         // Handle sending messages in the chat
         sendMessageButton.addEventListener('click', function() {
