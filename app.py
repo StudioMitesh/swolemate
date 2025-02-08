@@ -18,6 +18,8 @@ model = load_model('shoulder_press_model.keras')
 
 def process_video(video_path):
     df = extract_poses(video_path, label=None)
+    print("df shape:", df.shape)
+    print(df.head())
     if 'frame' in df.columns:
         df = df.drop(columns=["frame"])
     X = df.drop(columns=["label"]).values
@@ -42,12 +44,15 @@ def upload_video():
         if video_file.filename == '':
             return jsonify({'error': 'No selected file'}), 400
         video_filename = os.path.join(app.config['UPLOAD_FOLDER'], 'recorded_video.mp4')
+        print("Saving video to:", video_filename)
         video_file.save(video_filename)
+        print("video file saved")
 
         frames = process_video(video_filename)
         print("Frames shape:", frames.shape)
         
         try:
+            print("Predicting...")
             predictions = model.predict(frames)
             predicted_class = np.argmax(predictions, axis=1)
             print("Predicted class:", predicted_class)
@@ -65,7 +70,7 @@ def upload_video():
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, mimetype='video/mp4')
 
 @app.route('/')
 def home():

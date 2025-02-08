@@ -204,7 +204,7 @@
                     // Prepare the video to be sent to the server (if needed)
                     const formData = new FormData();
                     formData.append('video', blob, 'recorded_video.mp4');
-                    
+                    console.log("The form data", formData);
                     fetch('/upload_video', {
                         method: 'POST',
                         body: formData
