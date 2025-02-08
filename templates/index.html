@@ -91,6 +91,26 @@
             -webkit-transform: rotateY(180deg);
             -moz-transform: rotateY(180deg);
         }
+
+        #analysisResults {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #1a1a2e;
+            border-radius: 8px;
+            color: white;
+        }
+
+        #resultsList {
+            margin-top: 10px;
+        }
+
+        .result-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #2c2c54;
+            border-radius: 8px;
+        }
     </style>
 </head>
 <body class="bg-main-gradient text-white">
@@ -124,11 +144,9 @@
                 </select>
             </div>
 
-            <div id="resultContainer" class="hidden">
-                <p id="resultText" class="text-green-500 text-lg font-semibold"></p>
-            </div>
-            <div id="errorContainer" class="hidden">
-                <p id="errorText" class="text-red-500 text-sm"></p>
+            <div id="analysisResults">
+                <h3 class="text-lg font-semibold">Analysis Results</h3>
+                <div id="resultsList"></div>
             </div>
         </div>
     </div>
@@ -146,6 +164,8 @@
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const saveButton = document.getElementById('saveButton');
+        const resultsList = document.getElementById('resultsList');
+        const analysisResults = document.getElementById('analysisResults');
 
         let poseLandmarker = null;
         let runningMode = "VIDEO";
@@ -216,15 +236,30 @@
                     return response.json();
                 })
                 .then(data => {
-                    const resultText = document.getElementById('resultText');
-                    resultText.textContent = data.prediction === 1 ? 'Good Form!' : 'Form Needs Improvement';
-                    document.getElementById('resultContainer').classList.remove('hidden');
+                    resultsList.innerHTML = ''; // Clear previous results
 
-                    const errorText = document.getElementById('errorText');
-                    errorText.textContent = `Form Score: ${data.error_metric.toFixed(3)}`;
-                    document.getElementById('errorContainer').classList.remove('hidden');
+                    if (data.error) {
+                        resultsList.innerHTML = `<p class="text-red-500">${data.error}</p>`;
+                    } else {
+                        data.results.forEach(result => {
+                            const resultItem = document.createElement('div');
+                            resultItem.className = 'result-item';
+                            resultItem.innerHTML = `
+                                <p class="font-semibold">${result.message}</p>
+                                <p class="text-sm">Confidence: ${(result.confidence * 100).toFixed(2)}%</p>
+                            `;
+                            resultsList.appendChild(resultItem);
+                        });
+                    }
+
+                    // Show the results container
+                    analysisResults.style.display = 'block';
                 })
-                .catch(error => console.error('Error:', error));
+                .catch(error => {
+                    console.error('Error:', error);
+                    resultsList.innerHTML = `<p class="text-red-500">Failed to analyze video. Please try again.</p>`;
+                    analysisResults.style.display = 'block';
+                });
             };
         })
         .catch(err => console.error('Error accessing camera:', err));
