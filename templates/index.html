@@ -4,11 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SwoleMate</title>
-    <!-- Add Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Google Fonts for better typography -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0"></script>
 
     <style>
         body {
@@ -66,54 +64,36 @@
             transform: scale(1.05);
         }
 
-        .text-large {
-            font-size: 1.875rem;
-            font-weight: 600;
+        #videoContainer {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            margin: 20px 0;
         }
 
-        /* Chat styles */
-        #chatWindow {
-            display: none;
-            position: fixed;
-            bottom: 90px;
-            right: 100px;
-            background-color: white;
-            width: 350px;
-            height: 600px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
-            padding: 10px;
-            color: black;
-        }
-
-        #chatWindow .messages {
-            height: 320px;
-            overflow-y: scroll;
-            margin-bottom: 1px;
-        }
-
-        #chatWindow textarea {
+        #videoElement {
+            position: absolute;
             width: 100%;
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            margin-bottom: 1px;
-            resize: none;
+            height: 100%;
+            transform: rotateY(180deg);
+            -webkit-transform: rotateY(180deg);
+            -moz-transform: rotateY(180deg);
+            object-fit: cover;
         }
 
-        #chatWindow button {
+        #output_canvas {
+            position: absolute;
+            left: 0;
+            top: 0;
             width: 100%;
-            background-color: #4CAF50;
-            color: white;
-            padding: 1px;
-            border-radius: 8px;
-            border: none;
+            height: 100%;
+            transform: rotateY(180deg);
+            -webkit-transform: rotateY(180deg);
+            -moz-transform: rotateY(180deg);
         }
     </style>
 </head>
 <body class="bg-main-gradient text-white">
-
-    <!-- Sidebar -->
     <div id="sidebar" class="p-6">
         <h2>SwoleMate</h2>
         <a href="#">Profile</a>
@@ -125,14 +105,15 @@
         <div id="mainContent" class="space-y-6">
             <h1 class="text-4xl font-extrabold text-[#1a1a2e]">Welcome to SwoleMate</h1>
 
-            <div>
-                <video id="videoElement" autoplay class="w-3/5 rounded-lg shadow-lg"></video>
+            <div id="videoContainer" class="rounded-lg shadow-lg overflow-hidden">
+                <video id="videoElement" autoplay playsinline></video>
+                <canvas id="output_canvas"></canvas>
             </div>
 
             <div class="flex space-x-4">
-                <button id="startButton" class="bg-green-500 text-white btn">Start Video</button>
-                <button id="stopButton" disabled class="bg-red-500 text-white btn">Stop Video</button>
-                <button id="saveButton" disabled class="bg-blue-500 text-white btn">Save Video</button>
+                <button id="startButton" class="bg-green-500 text-white btn">Start Recording</button>
+                <button id="stopButton" disabled class="bg-red-500 text-white btn">Stop Recording</button>
+                <button id="saveButton" disabled class="bg-blue-500 text-white btn">Save Recording</button>
             </div>
 
             <div>
@@ -152,138 +133,160 @@
         </div>
     </div>
 
-    <!-- Chat Window -->
-    <div id="chatWindow">
-        <div class="messages" id="messages"></div>
-        <textarea id="chatInput" placeholder="Type a message..." rows="3"></textarea>
-        <button id="sendMessageButton">Send Message</button>
-    </div>
+    <script type="module">
+        import {
+            PoseLandmarker,
+            FilesetResolver,
+            DrawingUtils
+        } from "https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.0";
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
-        crossorigin="anonymous">
-    </script>
-
-    <script>
         const videoElement = document.getElementById('videoElement');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const saveButton = document.getElementById('saveButton');
-        const chatWindow = document.getElementById('chatWindow');
-        const sendMessageButton = document.getElementById('sendMessageButton');
-        const chatInput = document.getElementById('chatInput');
-        const messages = document.getElementById('messages');
-        let videoStream = null;
+
+        let poseLandmarker = null;
+        let runningMode = "VIDEO";
+        let webcamRunning = true;
         let mediaRecorder = null;
         let recordedChunks = [];
-        let savedVideo = null;
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => {
-                videoElement.srcObject = stream;
-                mediaRecorder = new MediaRecorder(stream);
 
-                // When data is available, push it into the recordedChunks array
-                mediaRecorder.ondataavailable = function(event) {
-                    if (event.data.size > 0) {
-                        recordedChunks.push(event.data);
-                    }
-                };
+        // Initialize pose landmarker
+        const createPoseLandmarker = async () => {
+            const vision = await FilesetResolver.forVisionTasks(
+                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+            );
+            poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`,
+                    delegate: "GPU"
+                },
+                runningMode: runningMode,
+                numPoses: 2
+            });
+        };
 
-                // Once the recording is stopped, combine all the chunks into a Blob
-                mediaRecorder.onstop = function() {
-                    const blob = new Blob(recordedChunks, { type: 'video/mp4' });
-                    const videoURL = URL.createObjectURL(blob);
-                    console.log("Recording complete. Video URL:", videoURL);
-                    
-                    // You can now use the videoURL to preview the video in the browser
-                    const videoPreview = document.createElement('video');
-                    videoPreview.src = videoURL;
-                    videoPreview.controls = true;
-                    //document.body.appendChild(videoPreview);  // Optionally display the video
+        await createPoseLandmarker();
+        const drawingUtils = new DrawingUtils(canvasCtx);
 
-                    // Prepare the video to be sent to the server (if needed)
-                    const formData = new FormData();
-                    formData.append('video', blob, 'recorded_video.mp4');
-                    console.log("The form data", formData);
-                    fetch('/upload_video', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Failed to upload video');
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        console.log("The data", data);
-                        const resultText = document.getElementById('resultText');
-                        if (data.prediction === 1) {
-                            resultText.textContent = 'Good Shoulder Press';
-                        } else {
-                            resultText.textContent = 'Bad Shoulder Press';
-                        }
-                        const resultContainer = document.getElementById('resultContainer');
-                        resultContainer.classList.remove('hidden');
-                        const errorText = document.getElementById('errorText');
-                        errorText.textContent = `Error Metric: ${data.error_metric.toFixed(3)}`;
-                        const errorContainer = document.getElementById('errorContainer');
-                        errorContainer.classList.remove('hidden');
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                    });
-                };
+        // Function to update canvas size
+        function updateCanvasSize() {
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+        }
 
-                // Start recording when the user clicks the start button
-                startButton.addEventListener('click', () => {
-                    recordedChunks = []; // Clear previous recordings
-                    mediaRecorder.start();
-                    console.log('Recording started');
-                    startButton.disabled = true;
-                    stopButton.disabled = false;
-                    saveButton.disabled = false;
-                });
-
-                // Stop recording when the user clicks the stop button
-                stopButton.addEventListener('click', () => {
-                    mediaRecorder.stop();
-                    console.log('Recording stopped');
-                    startButton.disabled = false;
-                    stopButton.disabled = true;
-                });
-
-                saveButton.addEventListener('click', () => {
-                    mediaRecorder.stop();
-                    console.log('Recording stopped');
-                });
-            })
-            .catch(err => console.error('Error accessing camera:', err));
-
-
-        // Handle sending messages in the chat
-        sendMessageButton.addEventListener('click', function() {
-            const message = chatInput.value.trim();
-            if (message) {
-                const newMessage = document.createElement('div');
-                newMessage.classList.add('message');
-                newMessage.textContent = message;
-                messages.appendChild(newMessage);
-                chatInput.value = ''; // Clear the input field
-                messages.scrollTop = messages.scrollHeight; // Scroll to the latest message
+        // Set up webcam
+        navigator.mediaDevices.getUserMedia({
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 }
             }
+        })
+        .then(stream => {
+            videoElement.srcObject = stream;
+            videoElement.onloadedmetadata = () => {
+                updateCanvasSize();
+                predictWebcam(); // Start pose detection immediately
+            };
+
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = function(event) {
+                if (event.data.size > 0) {
+                    recordedChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = function() {
+                const blob = new Blob(recordedChunks, { type: 'video/mp4' });
+                const videoURL = URL.createObjectURL(blob);
+                console.log("Recording complete. Video URL:", videoURL);
+
+                const formData = new FormData();
+                formData.append('video', blob, 'recorded_video.mp4');
+
+                fetch('/upload_video', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to upload video');
+                    return response.json();
+                })
+                .then(data => {
+                    const resultText = document.getElementById('resultText');
+                    resultText.textContent = data.prediction === 1 ? 'Good Form!' : 'Form Needs Improvement';
+                    document.getElementById('resultContainer').classList.remove('hidden');
+
+                    const errorText = document.getElementById('errorText');
+                    errorText.textContent = `Form Score: ${data.error_metric.toFixed(3)}`;
+                    document.getElementById('errorContainer').classList.remove('hidden');
+                })
+                .catch(error => console.error('Error:', error));
+            };
+        })
+        .catch(err => console.error('Error accessing camera:', err));
+
+        // Recording controls
+        startButton.addEventListener('click', () => {
+            recordedChunks = [];
+            mediaRecorder.start();
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            saveButton.disabled = false;
         });
 
-        // Dropdown exercise selection
+        stopButton.addEventListener('click', () => {
+            mediaRecorder.stop();
+            startButton.disabled = false;
+            stopButton.disabled = true;
+        });
+
+        saveButton.addEventListener('click', () => {
+            mediaRecorder.stop();
+        });
+
+        // Pose detection
+        let lastVideoTime = -1;
+        async function predictWebcam() {
+            if (!poseLandmarker) return;
+
+            if (runningMode === "IMAGE") {
+                runningMode = "VIDEO";
+                await poseLandmarker.setOptions({ runningMode: "VIDEO" });
+            }
+            let startTimeMs = performance.now();
+
+            if (lastVideoTime !== videoElement.currentTime) {
+                lastVideoTime = videoElement.currentTime;
+                poseLandmarker.detectForVideo(videoElement, startTimeMs, (result) => {
+                    canvasCtx.save();
+                    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                    for (const landmark of result.landmarks) {
+                        drawingUtils.drawLandmarks(landmark, {
+                            radius: (data) => DrawingUtils.lerp(data.from?.z, -0.15, 0.1, 5, 1)
+                        });
+                        drawingUtils.drawConnectors(landmark, PoseLandmarker.POSE_CONNECTIONS);
+                    }
+                    canvasCtx.restore();
+                });
+            }
+
+            if (webcamRunning) {
+                window.requestAnimationFrame(predictWebcam);
+            }
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', updateCanvasSize);
+
+        // Exercise selection
         const exerciseSelect = document.getElementById('exerciseSelect');
         exerciseSelect.addEventListener('change', function() {
             console.log('Selected exercise: ' + exerciseSelect.value);
         });
-        document.getElementById('openChatButton').addEventListener('click', function(event) {
-            event.preventDefault(); // Prevent default link behavior
-            chatWindow.style.display = 'block'; // Show chat window
-        });
     </script>
-
 </body>
 </html>
