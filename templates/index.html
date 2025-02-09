@@ -178,6 +178,40 @@
         .message-bubble li {
             margin-bottom: 0.25rem;
         }
+
+        /* Loading Animation Styles */
+        .loading-bubble {
+            display: inline-block;
+            padding: 1rem;
+            border-radius: 1rem;
+            background: #e9ecef;
+            color: #212529;
+            max-width: 85%;
+            margin-bottom: 1rem;
+        }
+
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            margin: 0 2px;
+            background-color: #90949c;
+            border-radius: 50%;
+            animation: typing 1s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: 0s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
     </style>
 </head>
 <body class="bg-main-gradient text-white">
@@ -412,6 +446,36 @@
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             }
 
+            function showLoadingIndicator() {
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'chat-message chat-message-bot';
+                loadingDiv.id = 'loadingIndicator';
+                
+                const loadingBubble = document.createElement('div');
+                loadingBubble.className = 'loading-bubble';
+                
+                const typingIndicator = document.createElement('div');
+                typingIndicator.className = 'typing-indicator';
+                
+                for (let i = 0; i < 3; i++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'typing-dot';
+                    typingIndicator.appendChild(dot);
+                }
+                
+                loadingBubble.appendChild(typingIndicator);
+                loadingDiv.appendChild(loadingBubble);
+                chatMessages.appendChild(loadingDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            function hideLoadingIndicator() {
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                if (loadingIndicator) {
+                    loadingIndicator.remove();
+                }
+            }
+
             function sendMessage() {
                 console.log('sendMessage called');
                 const message = messageInput.value.trim();
@@ -420,6 +484,7 @@
                 if (message) {
                     addMessage(message, true);
                     messageInput.value = '';
+                    showLoadingIndicator();
 
                     // Send message to backend
                     fetch('/chat', {
@@ -438,12 +503,14 @@
                     })
                     .then(data => {
                         console.log('Data received:', data);
+                        hideLoadingIndicator();
                         addMessage(data.response);
                         chatHistory.push({ role: "user", message: message });
                         chatHistory.push({ role: "assistant", message: data.response });
                     })
                     .catch(error => {
                         console.error('Error:', error);
+                        hideLoadingIndicator();
                         addMessage('Sorry, there was an error processing your message.');
                     });
                 }
