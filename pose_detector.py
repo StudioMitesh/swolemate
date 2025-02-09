@@ -3,7 +3,7 @@ import cv2
 import pandas as pd
 import numpy as np
 
-def extract_poses(video_path, rep_threshold=0.05, min_rep_duration=10, smoothing_window=5):
+def extract_poses(video_path, rep_threshold=0.1, min_rep_duration=15, smoothing_window=5):
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose(static_image_mode=False)
     
@@ -35,6 +35,10 @@ def extract_poses(video_path, rep_threshold=0.05, min_rep_duration=10, smoothing
     cap.release()
     print(f"Processed {frame_count} frames.")
 
+    if not data:
+        print("No pose data detected in video")
+        return []
+
     cols = ["x11", "y11", "z11", "v11",
             "x13", "y13", "z13", "v13",
             "x15", "y15", "z15", "v15",
@@ -45,35 +49,41 @@ def extract_poses(video_path, rep_threshold=0.05, min_rep_duration=10, smoothing
     
     df = pd.DataFrame(data, columns=cols)
 
-    smoothed_data = df.drop(columns=['frame'])
-    smoothed_data = smoothed_data.rolling(window=smoothing_window).mean().dropna()
+    # Focus on wrist movement for shoulder press
+    wrist_cols = ['y15', 'y16']  # Left and right wrist y-coordinates
+    wrist_data = df[wrist_cols]
     
-    displacement = []
-    for i in range(1, len(smoothed_data)):
-        prev_row = smoothed_data.iloc[i - 1]
-        current_row = smoothed_data.iloc[i]
-        dist = np.linalg.norm(current_row.values - prev_row.values)
-        displacement.append(dist)
+    # Smooth the data
+    smoothed_data = wrist_data.rolling(window=smoothing_window, center=True).mean()
     
-    displacement = np.array(displacement)
-    min_displacement, max_displacement = np.min(displacement), np.max(displacement)
-    threshold = (max_displacement - min_displacement) * rep_threshold
+    # Calculate vertical movement
+    vertical_movement = smoothed_data.diff().abs().mean(axis=1)
     
+    # Normalize the movement
+    max_movement = vertical_movement.max()
+    normalized_movement = vertical_movement / max_movement if max_movement > 0 else vertical_movement
+    
+    # Detect reps using peak detection
     rep_sequences = []
-    rep_start = None
-    rep_frame_count = 0
-
-    for i in range(len(displacement) - 1):
-        if displacement[i] > threshold:
-            if rep_start is None:
-                rep_start = i
-                rep_frame_count = 1
-        elif displacement[i] < threshold and rep_start is not None:
-            rep_frame_count += 1
-            if rep_frame_count >= min_rep_duration:  
-                rep_sequences.append(df.iloc[rep_start:i + 1].reset_index(drop=True))
-                rep_start = None 
-                rep_frame_count = 0  
-
+    in_rep = False
+    rep_start = 0
+    last_peak = 0
+    
+    for i in range(1, len(normalized_movement) - 1):
+        current = normalized_movement.iloc[i]
+        
+        # Start of rep (moving up)
+        if not in_rep and current > rep_threshold:
+            in_rep = True
+            rep_start = i
+        
+        # End of rep (completed movement)
+        elif in_rep and i - rep_start >= min_rep_duration:
+            # Check if we've moved back down
+            if current < rep_threshold:
+                rep_sequences.append(df.iloc[rep_start:i].reset_index(drop=True))
+                in_rep = False
+                last_peak = i
+    
     print(f"Detected {len(rep_sequences)} reps")
     return rep_sequences

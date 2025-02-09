@@ -212,35 +212,140 @@
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-10px); }
         }
+
+        /* Badge styles */
+        .badges-container {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .badge-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            transition: transform 0.2s ease, opacity 0.3s ease;
+        }
+
+        .badge-item:hover {
+            transform: scale(1.02);
+        }
+
+        .badge-icon {
+            font-size: 2rem;
+            margin-right: 15px;
+            animation: badgeShine 2s infinite;
+        }
+
+        .badge-info {
+            flex-grow: 1;
+        }
+
+        .badge-name {
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 4px;
+        }
+
+        .badge-description {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .locked-badge {
+            opacity: 0.5;
+            filter: grayscale(1);
+        }
+
+        @keyframes badgeShine {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .badge-unlock-animation {
+            animation: unlockBadge 1s ease-out;
+        }
+
+        @keyframes unlockBadge {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Add styles for active tab */
+        .nav-link {
+            padding: 25px 35px;
+            text-decoration: none;
+            font-size: 1.125rem;
+            color: white;
+            display: block;
+            transition: background-color 0.3s ease;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background-color: #575757;
+        }
+
+        /* Content section styles */
+        .content-section {
+            display: none;
+        }
+
+        .content-section.active {
+            display: block;
+        }
+
+        /* Analysis layout styles */
+        .analysis-container {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+
+        .video-section {
+            flex: 1;
+        }
+
+        .chat-section {
+            flex: 1;
+            max-width: 450px;
+        }
     </style>
 </head>
 <body class="bg-main-gradient text-white">
     <div id="sidebar" class="p-6">
         <h2>SwoleMate</h2>
-        <a href="#">Profile</a>
-        <a href="#">Rewards</a>
-        <a href="#" id="openChatButton">Chat</a>
+        <a href="#" class="nav-link" data-section="analysis">Analysis</a>
+        <a href="#" class="nav-link" data-section="rewards">Rewards</a>
     </div>
 
     <div id="mainWrapper" class="p-8">
-        <div id="mainContent" class="space-y-6">
-            <h1 class="text-4xl font-extrabold text-[#1a1a2e]">Welcome to SwoleMate</h1>
+        <!-- Analysis Section -->
+        <div id="analysis-section" class="content-section active">
+            <h1 class="text-4xl font-extrabold text-[#1a1a2e] mb-6">Exercise Analysis</h1>
 
-            <div class="flex gap-8">
-                <div>
+            <div class="analysis-container">
+                <!-- Left side: Video and controls -->
+                <div class="video-section">
                     <div id="videoContainer" class="rounded-lg shadow-lg overflow-hidden">
                         <video id="videoElement" autoplay playsinline></video>
                         <canvas id="output_canvas"></canvas>
                     </div>
 
-                    <!-- <div class="mt-4">
-                        <h1 class="text-2xl font-bold text-[#1a1a2e]">Rep Count: <span id="rep-count">0</span></h1>
-                    </div> -->
+                    <div class="mt-4">
+                        <h2 class="text-2xl font-bold text-[#1a1a2e]">Progress</h2>
+                        <p class="text-[#1a1a2e] text-lg">Total Reps: <span id="rep-count" class="font-semibold">0</span></p>
+                    </div>
 
                     <div class="flex space-x-4 mt-4">
                         <button id="startButton" class="bg-green-500 text-white btn">Start Recording</button>
-                        <button id="stopButton" disabled class="bg-red-500 text-white btn">Stop Recording</button>
-                        <button id="saveButton" disabled class="bg-blue-500 text-white btn">Save Recording</button>
+                        <button id="stopButton" disabled class="bg-red-500 text-white btn">Stop & Save Recording</button>
                     </div>
 
                     <div class="mt-4">
@@ -250,29 +355,49 @@
                             <option value="squats">Squats</option>
                         </select>
                     </div>
+
+                    <div id="analysisResults" class="mt-4">
+                        <h3 class="text-lg font-semibold">Analysis Results</h3>
+                        <div id="resultsList"></div>
+                    </div>
                 </div>
 
-                <!-- Chat Interface -->
-                <div id="chatContainer" class="w-96 bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
-                    <div class="bg-[#1a1a2e] p-4">
-                        <h2 class="text-white text-lg font-semibold">SwoleMate Chat</h2>
-                    </div>
-                    <div id="chatMessages" class="flex-1 p-4 overflow-y-auto h-[400px] bg-gray-50">
-                        <!-- Messages will be added here -->
-                    </div>
-                    <div class="p-4 border-t border-gray-200">
-                        <div class="flex gap-2">
-                            <input type="text" id="messageInput" class="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500 text-gray-800" placeholder="Type your message..." />
-                            <button id="sendMessage" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors whitespace-nowrap">Send</button>
+                <!-- Right side: Chat interface -->
+                <div class="chat-section">
+                    <div id="chatContainer" class="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col h-full">
+                        <div class="bg-[#1a1a2e] p-4">
+                            <h2 class="text-white text-lg font-semibold">Form Analysis Chat</h2>
                         </div>
-                    </div>                    
+                        <div id="chatMessages" class="flex-1 p-4 overflow-y-auto bg-gray-50">
+                            <!-- Messages will be added here -->
+                        </div>
+                        <div class="p-4 border-t border-gray-200">
+                            <div class="flex gap-2">
+                                <input type="text" id="messageInput" class="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500 text-gray-800" placeholder="Type your message..." />
+                                <button id="sendMessage" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors whitespace-nowrap">Send</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div id="analysisResults">
-                <h3 class="text-lg font-semibold">Analysis Results</h3>
-                <div id="resultsList"></div>
+        <!-- Rewards Section -->
+        <div id="rewards-section" class="content-section">
+            <h1 class="text-4xl font-extrabold text-[#1a1a2e] mb-6">Your Achievements</h1>
+            
+            <div class="max-w-3xl">
+                <div class="bg-white rounded-lg p-6 shadow-lg mb-6">
+                    <h2 class="text-2xl font-bold text-[#1a1a2e] mb-4">Progress</h2>
+                    <p class="text-[#1a1a2e] text-xl">Total Reps: <span id="rewards-rep-count" class="font-semibold">0</span></p>
+                </div>
+
+                <div class="badges-container">
+                    <h2 class="text-xl font-bold text-[#1a1a2e] mb-4">Achievement Badges</h2>
+                    <div id="rewards-badges-list">
+                        <!-- Badges will be dynamically inserted here -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -509,7 +634,6 @@
         const canvasCtx = canvasElement.getContext('2d');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
-        const saveButton = document.getElementById('saveButton');
         const resultsList = document.getElementById('resultsList');
         const analysisResults = document.getElementById('analysisResults');
 
@@ -521,6 +645,72 @@
         let frameCount = 0;
         let isRecording = false;
         const maxFrames = 10;
+
+        // Add this at the beginning of your script section
+        let lastBadgeCount = 0;
+
+        function updateBadges(badges) {
+            const badgesList = document.getElementById('rewards-badges-list');
+            const currentBadgeCount = badges.length;
+            
+            // Define all possible badges
+            const allBadges = {
+                1: {"name": "First Rep", "description": "Completed your first rep!", "icon": "🥉"},
+                5: {"name": "Getting Started", "description": "Completed 5 reps!", "icon": "🥈"},
+                10: {"name": "Progress Master", "description": "Completed 10 reps!", "icon": "🥇"},
+                25: {"name": "Fitness Expert", "description": "Completed 25 reps!", "icon": "💪"},
+                50: {"name": "Fitness Champion", "description": "Completed 50 reps!", "icon": "🏆"},
+                100: {"name": "Workout Legend", "description": "Completed 100 reps!", "icon": "👑"}
+            };
+
+            if (!badgesList) return; // Only proceed if we're on the rewards page
+            
+            badgesList.innerHTML = '';
+            
+            // Create badge elements for all possible badges
+            Object.entries(allBadges).forEach(([threshold, badge]) => {
+                const isEarned = badges.some(b => b.name === badge.name);
+                const badgeElement = document.createElement('div');
+                badgeElement.className = `badge-item ${isEarned ? '' : 'locked-badge'}`;
+                
+                if (isEarned && currentBadgeCount > lastBadgeCount) {
+                    badgeElement.classList.add('badge-unlock-animation');
+                }
+                
+                badgeElement.innerHTML = `
+                    <div class="badge-icon">${badge.icon}</div>
+                    <div class="badge-info">
+                        <div class="badge-name">${badge.name}</div>
+                        <div class="badge-description">${badge.description}</div>
+                    </div>
+                `;
+                
+                badgesList.appendChild(badgeElement);
+            });
+            
+            lastBadgeCount = currentBadgeCount;
+        }
+
+        // Update the updateRepCount function to update both rep count displays
+        function updateRepCount() {
+            fetch('/get_rep_count')
+                .then(response => response.json())
+                .then(data => {
+                    // Update both rep count displays
+                    document.getElementById('rewards-rep-count').textContent = data.rep_count;
+                    updateBadges(data.badges);
+                });
+        }
+
+        // Add this to your video analysis response handling
+        function handleVideoAnalysisResponse(response) {
+            if (response.rep_count !== undefined) {
+                document.getElementById('rep-count').textContent = response.rep_count;
+            }
+            if (response.badges) {
+                updateBadges(response.badges);
+            }
+        }
 
         // Initialize pose landmarker
         const createPoseLandmarker = async () => {
@@ -587,8 +777,12 @@
                         resultsList.innerHTML = `<p class="text-red-500">${data.error}</p>`;
                     } else {
                         if (data.rep_count !== undefined) {
-                            repCountDisplay.textContent = data.rep_count;
-                     }       
+                            document.getElementById('rep-count').textContent = data.rep_count;
+                        }
+                        if (data.badges) {
+                            updateBadges(data.badges);
+                        }
+                        
                         // Process results and initialize chat
                         let resultCodes = data.results.map(r => r.class).join(', ');
                         console.log('Sending result codes to chat:', resultCodes);
@@ -651,7 +845,6 @@
             mediaRecorder.start();
             startButton.disabled = true;
             stopButton.disabled = false;
-            saveButton.disabled = false;
 
             document.getElementById('coordinateTableBody').innerHTML = '';
             frameCount = 0;
@@ -663,11 +856,6 @@
             mediaRecorder.stop();
             startButton.disabled = false;
             stopButton.disabled = true;
-            isRecording = false;
-        });
-
-        saveButton.addEventListener('click', () => {
-            mediaRecorder.stop();
             isRecording = false;
         });
 
@@ -748,17 +936,6 @@
             }
         }
 
-        // function updateRepCount() {
-        //     fetch('/get_rep_count')  // Endpoint to get the current rep count
-        //         .then(response => response.json())
-        //         .then(data => {
-        //             const repCountElement = document.getElementById('rep-count');
-        //             repCountElement.textContent = data.rep_count;
-        //         })
-        //         .catch(error => console.error('Error fetching rep count:', error));
-        // }
-        // setInterval(updateRepCount, 1000);
-
         // Handle window resize
         window.addEventListener('resize', updateCanvasSize);
 
@@ -767,6 +944,30 @@
         exerciseSelect.addEventListener('change', function() {
             console.log('Selected exercise: ' + exerciseSelect.value);
         });
+
+        // Add periodic rep count updates
+        setInterval(updateRepCount, 1000);
+
+        // Add tab switching functionality
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetSection = link.getAttribute('data-section');
+                
+                // Update active tab
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+                
+                // Update visible section
+                document.querySelectorAll('.content-section').forEach(section => {
+                    section.classList.remove('active');
+                });
+                document.getElementById(`${targetSection}-section`).classList.add('active');
+            });
+        });
+
+        // Set Analysis as default active tab
+        document.querySelector('[data-section="analysis"]').classList.add('active');
     </script>
 </body>
 </html>

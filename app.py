@@ -12,6 +12,7 @@ from llm_chat import initial_call, chat_call
 from shoulder_press.sp_metrics import compute_angle, compute_displacement, compute_depth
 import mediapipe as mp
 import pandas as pd
+import json
 
 app = Flask(__name__)
 
@@ -19,9 +20,45 @@ UPLOAD_FOLDER = "uploads"
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-rep_count = 0
+# Create a file to store rep count persistently
+REP_COUNT_FILE = 'rep_count.json'
+
+def load_rep_count():
+    try:
+        if os.path.exists(REP_COUNT_FILE):
+            with open(REP_COUNT_FILE, 'r') as f:
+                data = json.load(f)
+                return data.get('rep_count', 0)
+    except Exception as e:
+        print(f"Error loading rep count: {e}")
+    return 0
+
+def save_rep_count(count):
+    try:
+        with open(REP_COUNT_FILE, 'w') as f:
+            json.dump({'rep_count': count}, f)
+    except Exception as e:
+        print(f"Error saving rep count: {e}")
+
+rep_count = load_rep_count()
 model = load_model('new_shoulder_press_model.keras')
 
+# Badge definitions
+BADGES = {
+    1: {"name": "First Rep", "description": "Completed your first rep!", "icon": "🥉"},
+    5: {"name": "Getting Started", "description": "Completed 5 reps!", "icon": "🥈"},
+    10: {"name": "Progress Master", "description": "Completed 10 reps!", "icon": "🥇"},
+    25: {"name": "Fitness Expert", "description": "Completed 25 reps!", "icon": "💪"},
+    50: {"name": "Fitness Champion", "description": "Completed 50 reps!", "icon": "🏆"},
+    100: {"name": "Workout Legend", "description": "Completed 100 reps!", "icon": "👑"}
+}
+
+def check_badges(total_reps):
+    earned_badges = []
+    for threshold, badge in BADGES.items():
+        if total_reps >= threshold:
+            earned_badges.append(badge)
+    return earned_badges
 
 def save_temp_video(video_file):
     if not video_file:
@@ -54,6 +91,17 @@ def analyze_video(video_path):
     global rep_count
     rep_sequences = extract_poses(video_path)
     all_rep_metrics = []
+    
+    if len(rep_sequences) == 0:
+        return {'error': 'No pose data detected'}
+        
+    # Update rep count and save it
+    if len(rep_sequences) > 0:
+        rep_count += len(rep_sequences)
+        save_rep_count(rep_count)
+        print(f"Updated rep count to: {rep_count}")
+
+    # Process each rep for metrics
     for rep in rep_sequences:
         print(f"Processing rep: {rep}")
         left_shoulder = (rep['x11'].iloc[0], rep['y11'].iloc[0])
@@ -125,8 +173,14 @@ def analyze_video(video_path):
             "metrics": all_rep_metrics
         })
     
-    return {'results': feedback, "rep_count": rep_count}
-
+    # Get badges based on total rep count
+    badges = check_badges(rep_count)
+    
+    return {
+        'results': feedback,
+        'rep_count': rep_count,
+        'badges': badges
+    }
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
@@ -134,10 +188,20 @@ def uploaded_file(filename):
 
 @app.route('/get_rep_count', methods=['GET'])
 def get_rep_count():
-    return jsonify({'rep_count': rep_count})
+    global rep_count
+    rep_count = load_rep_count()  # Ensure we have the latest count
+    badges = check_badges(rep_count)
+    return jsonify({
+        'rep_count': rep_count,
+        'badges': badges
+    })
 
 @app.route('/')
 def home():
+    # Reset rep count when page loads
+    global rep_count
+    rep_count = 0
+    save_rep_count(rep_count)
     return render_template('index.html')
 
 @app.route('/initial_chat', methods=['POST'])
