@@ -9,6 +9,9 @@ import os
 from tensorflow.keras.models import load_model
 from pose_detector import extract_poses
 from llm_chat import initial_call, chat_call
+from shoulder_press.sp_metrics import compute_angle, compute_displacement, compute_depth
+import mediapipe as mp
+import pandas as pd
 
 app = Flask(__name__)
 
@@ -16,12 +19,9 @@ UPLOAD_FOLDER = "uploads"
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+rep_count = 0
 model = load_model('new_shoulder_press_model.keras')
 
-import mediapipe as mp
-import cv2
-import pandas as pd
-import numpy as np
 
 def save_temp_video(video_file):
     if not video_file:
@@ -41,11 +41,9 @@ def upload_video():
         if video_file.filename == '':
             return jsonify({'error': 'No selected file'}), 400
 
-        # Save the video temporarily
         video_path = save_temp_video(video_file)
         print(f"Video saved to: {video_path}")
 
-        # Analyze the video
         result = analyze_video(video_path)
         return jsonify(result)
     except Exception as e:
@@ -53,8 +51,41 @@ def upload_video():
         return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
 
 def analyze_video(video_path):
-    video_path = os.path.join(app.config['UPLOAD_FOLDER'], 'bad_sp3.mov')
     rep_sequences = extract_poses(video_path)
+    all_rep_metrics = []
+    for rep in rep_sequences:
+        print(f"Processing rep: {rep}")
+        left_shoulder = (rep['x11'].iloc[0], rep['y11'].iloc[0])
+        right_shoulder = (rep['x12'].iloc[0], rep['y12'].iloc[0])
+        left_elbow = (rep['x13'].iloc[0], rep['y13'].iloc[0])
+        right_elbow = (rep['x14'].iloc[0], rep['y14'].iloc[0])
+        left_wrist = (rep['x15'].iloc[0], rep['y15'].iloc[0])
+        right_wrist = (rep['x16'].iloc[0], rep['y16'].iloc[0])
+
+        left_elbow_angle = compute_angle(left_shoulder, left_elbow, left_wrist)
+        right_elbow_angle = compute_angle(right_shoulder, right_elbow, right_wrist)
+
+        left_shoulder_displacement = compute_displacement(left_shoulder, left_elbow)
+        right_shoulder_displacement = compute_displacement(right_shoulder, right_elbow)
+
+        left_forearm_angle = compute_angle(left_elbow, left_wrist, (0, 0))
+        right_forearm_angle = compute_angle(right_elbow, right_wrist, (0, 0))
+
+        left_depth = compute_depth(left_shoulder, left_wrist)
+        right_depth = compute_depth(right_shoulder, right_wrist)
+
+        rep_metrics = {
+            'left_elbow_angle': left_elbow_angle,
+            'right_elbow_angle': right_elbow_angle,
+            'left_shoulder_displacement': left_shoulder_displacement,
+            'right_shoulder_displacement': right_shoulder_displacement,
+            'left_forearm_angle': left_forearm_angle,
+            'right_forearm_angle': right_forearm_angle,
+            'left_depth': left_depth,
+            'right_depth': right_depth
+        }
+        all_rep_metrics.append(rep_metrics)
+
     if len(rep_sequences) == 0:
         return {'error': 'No pose data detected'}
     
@@ -68,10 +99,6 @@ def analyze_video(video_path):
     X = np.array(X)
     print(f"Processed input shape: {X.shape}")  
     print(f"First row of input data:\n{X[0]}")
-    
-    test_input = np.random.randn(1, 60, X.shape[-1])  # Random data
-    pred_test = model.predict(test_input)
-    print(f"Prediction on random data: {pred_test}")
 
     predictions = model.predict(np.array(X))
     print(f"Predictions:\n{predictions}")
@@ -92,10 +119,11 @@ def analyze_video(video_path):
         feedback.append({
             'class': int(class_idx),
             'message': class_mapping[class_idx],
-            'confidence': float(predictions[0][class_idx])
+            'confidence': float(predictions[0][class_idx]),
+            "metrics": all_rep_metrics
         })
     
-    return {'results': feedback}
+    return {'results': feedback, "rep_count": rep_count}
 
 
 @app.route('/uploads/<filename>')
