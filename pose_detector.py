@@ -3,7 +3,7 @@ import cv2
 import pandas as pd
 import numpy as np
 
-def extract_poses(video_path, rep_threshold=0.1, min_rep_duration=15, smoothing_window=5):
+def extract_poses(video_path, rep_threshold=0.6, min_rep_duration=15, smoothing_window=5):
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose(static_image_mode=False)
     

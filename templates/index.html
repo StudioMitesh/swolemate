@@ -338,11 +338,6 @@
                         <canvas id="output_canvas"></canvas>
                     </div>
 
-                    <div class="mt-4">
-                        <h2 class="text-2xl font-bold text-[#1a1a2e]">Progress</h2>
-                        <p class="text-[#1a1a2e] text-lg">Total Reps: <span id="rep-count" class="font-semibold">0</span></p>
-                    </div>
-
                     <div class="flex space-x-4 mt-4">
                         <button id="startButton" class="bg-green-500 text-white btn">Start Recording</button>
                         <button id="stopButton" disabled class="bg-red-500 text-white btn">Stop & Save Recording</button>
@@ -387,10 +382,6 @@
             <h1 class="text-4xl font-extrabold text-[#1a1a2e] mb-6">Your Achievements</h1>
             
             <div class="max-w-3xl">
-                <div class="bg-white rounded-lg p-6 shadow-lg mb-6">
-                    <h2 class="text-2xl font-bold text-[#1a1a2e] mb-4">Progress</h2>
-                    <p class="text-[#1a1a2e] text-xl">Total Reps: <span id="rewards-rep-count" class="font-semibold">0</span></p>
-                </div>
 
                 <div class="badges-container">
                     <h2 class="text-xl font-bold text-[#1a1a2e] mb-4">Achievement Badges</h2>
@@ -656,11 +647,11 @@
             // Define all possible badges
             const allBadges = {
                 1: {"name": "First Rep", "description": "Completed your first rep!", "icon": "🥉"},
-                5: {"name": "Getting Started", "description": "Completed 5 reps!", "icon": "🥈"},
-                10: {"name": "Progress Master", "description": "Completed 10 reps!", "icon": "🥇"},
-                25: {"name": "Fitness Expert", "description": "Completed 25 reps!", "icon": "💪"},
-                50: {"name": "Fitness Champion", "description": "Completed 50 reps!", "icon": "🏆"},
-                100: {"name": "Workout Legend", "description": "Completed 100 reps!", "icon": "👑"}
+                5: {"name": "Getting Started", "description": "You're getting the hang of it!", "icon": "🥈"},
+                10: {"name": "Progress Master", "description": "Almost there!", "icon": "🥇"},
+                25: {"name": "Fitness Expert", "description": "Wow! You're an expert now!", "icon": "💪"},
+                50: {"name": "Fitness Champion", "description": "You're almost a master!", "icon": "🏆"},
+                100: {"name": "Workout Legend", "description": "Now you are a master!", "icon": "👑"}
             };
 
             if (!badgesList) return; // Only proceed if we're on the rewards page
