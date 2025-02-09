@@ -130,6 +130,47 @@
                 <canvas id="output_canvas"></canvas>
             </div>
 
+            <!-- Coordinate Table -->
+            <div class="overflow-x-auto mt-4">
+                <table id="coordinateTable" class="min-w-full bg-white rounded-lg overflow-hidden shadow-lg">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-gray-600">Frame</th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-gray-600" colspan="3">Left Shoulder</th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-gray-600" colspan="3">Right Shoulder</th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-gray-600" colspan="3">Left Elbow</th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-gray-600" colspan="3">Right Elbow</th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-gray-600" colspan="3">Left Wrist</th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-gray-600" colspan="3">Right Wrist</th>
+                        </tr>
+                        <tr>
+                            <th class="px-4 py-2"></th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">X</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Y</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Z</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">X</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Y</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Z</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">X</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Y</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Z</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">X</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Y</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Z</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">X</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Y</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Z</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">X</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Y</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Z</th>
+                        </tr>
+                    </thead>
+                    <tbody id="coordinateTableBody">
+                    </tbody>
+                </table>
+            </div>
+
+
             <div class="flex space-x-4">
                 <button id="startButton" class="bg-green-500 text-white btn">Start Recording</button>
                 <button id="stopButton" disabled class="bg-red-500 text-white btn">Stop Recording</button>
@@ -172,6 +213,9 @@
         let webcamRunning = true;
         let mediaRecorder = null;
         let recordedChunks = [];
+        let frameCount = 0;
+        let isRecording = false; // Add this to control table updates
+        const maxFrames = 10;
 
         // Initialize pose landmarker
         const createPoseLandmarker = async () => {
@@ -271,16 +315,23 @@
             startButton.disabled = true;
             stopButton.disabled = false;
             saveButton.disabled = false;
+
+            document.getElementById('coordinateTableBody').innerHTML = '';
+            frameCount = 0;
+            webcamRunning = true;
+            isRecording = true; // Start table updates
         });
 
         stopButton.addEventListener('click', () => {
             mediaRecorder.stop();
             startButton.disabled = false;
             stopButton.disabled = true;
+            isRecording = false;
         });
 
         saveButton.addEventListener('click', () => {
             mediaRecorder.stop();
+            isRecording = false;
         });
 
         // Pose detection
@@ -299,6 +350,52 @@
                 poseLandmarker.detectForVideo(videoElement, startTimeMs, (result) => {
                     canvasCtx.save();
                     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                    if (result.landmarks && result.landmarks[0] && isRecording) {
+                        const landmarks = result.landmarks[0];
+                        
+                        // Get table body reference
+                        const tableBody = document.getElementById('coordinateTableBody');
+                        
+                        // Create new row
+                        const row = document.createElement('tr');
+                        row.className = frameCount % 2 === 0 ? 'bg-gray-50' : 'bg-white';
+                        
+                        // Add frame number
+                        const frameCell = document.createElement('td');
+                        frameCell.className = 'px-4 py-2 text-sm text-gray-600';
+                        frameCell.textContent = frameCount + 1;
+                        row.appendChild(frameCell);
+                        
+                        // Joint indices in MediaPipe
+                        const joints = [
+                            landmarks[11], // Left shoulder
+                            landmarks[12], // Right shoulder
+                            landmarks[13], // Left elbow
+                            landmarks[14], // Right elbow
+                            landmarks[15], // Left wrist
+                            landmarks[16]  // Right wrist
+                        ];
+                        
+                        // Add coordinates for each joint
+                        joints.forEach(joint => {
+                            ['x', 'y', 'z'].forEach(coord => {
+                                const cell = document.createElement('td');
+                                cell.className = 'px-4 py-2 text-sm text-gray-600';
+                                cell.textContent = joint[coord].toFixed(3);
+                                row.appendChild(cell);
+                            });
+                        });
+                        
+                        // Add row to table
+                        tableBody.insertBefore(row, tableBody.firstChild);
+                        
+                        // Remove old rows if we exceed maxFrames
+                        if (tableBody.children.length > maxFrames) {
+                            tableBody.removeChild(tableBody.lastChild);
+                        }
+                        
+                        frameCount++;
+                    }
                     for (const landmark of result.landmarks) {
                         drawingUtils.drawLandmarks(landmark, {
                             radius: (data) => DrawingUtils.lerp(data.from?.z, -0.15, 0.1, 5, 1)
