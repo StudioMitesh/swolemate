@@ -51,6 +51,7 @@ def upload_video():
         return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
 
 def analyze_video(video_path):
+    global rep_count
     rep_sequences = extract_poses(video_path)
     all_rep_metrics = []
     for rep in rep_sequences:
@@ -88,7 +89,8 @@ def analyze_video(video_path):
 
     if len(rep_sequences) == 0:
         return {'error': 'No pose data detected'}
-    
+    if len(rep_sequences) > 0:
+        rep_count += len(rep_sequences)
     X = []
     scaler = StandardScaler()
     for seq in rep_sequences:
@@ -129,6 +131,10 @@ def analyze_video(video_path):
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, mimetype='video/mp4')
+
+@app.route('/get_rep_count', methods=['GET'])
+def get_rep_count():
+    return jsonify({'rep_count': rep_count})
 
 @app.route('/')
 def home():
