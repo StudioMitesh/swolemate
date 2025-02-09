@@ -111,6 +111,73 @@
             background-color: #2c2c54;
             border-radius: 8px;
         }
+
+        #chatContainer {
+            width: 400px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+            margin-left: 20px;
+            z-index: 10;
+        }
+
+        #chatMessages {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            background: #f8f9fa;
+            min-height: 400px;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .chat-message {
+            margin-bottom: 1rem;
+            word-wrap: break-word;
+        }
+
+        .chat-message-user {
+            text-align: right;
+        }
+
+        .chat-message-bot {
+            text-align: left;
+        }
+
+        .message-bubble {
+            display: inline-block;
+            padding: 1rem;
+            border-radius: 1rem;
+            max-width: 85%;
+            white-space: pre-line;
+            text-align: left;
+            line-height: 1.5;
+        }
+
+        .message-bubble-user {
+            background: #007bff;
+            color: white;
+        }
+
+        .message-bubble-bot {
+            background: #e9ecef;
+            color: #212529;
+        }
+
+        .message-bubble br {
+            margin-bottom: 0.5rem;
+        }
+
+        .message-bubble ul {
+            margin-left: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .message-bubble li {
+            margin-bottom: 0.25rem;
+        }
     </style>
 </head>
 <body class="bg-main-gradient text-white">
@@ -125,9 +192,43 @@
         <div id="mainContent" class="space-y-6">
             <h1 class="text-4xl font-extrabold text-[#1a1a2e]">Welcome to SwoleMate</h1>
 
-            <div id="videoContainer" class="rounded-lg shadow-lg overflow-hidden">
-                <video id="videoElement" autoplay playsinline></video>
-                <canvas id="output_canvas"></canvas>
+            <div class="flex gap-8">
+                <div>
+                    <div id="videoContainer" class="rounded-lg shadow-lg overflow-hidden">
+                        <video id="videoElement" autoplay playsinline></video>
+                        <canvas id="output_canvas"></canvas>
+                    </div>
+
+                    <div class="flex space-x-4 mt-4">
+                        <button id="startButton" class="bg-green-500 text-white btn">Start Recording</button>
+                        <button id="stopButton" disabled class="bg-red-500 text-white btn">Stop Recording</button>
+                        <button id="saveButton" disabled class="bg-blue-500 text-white btn">Save Recording</button>
+                    </div>
+
+                    <div class="mt-4">
+                        <h3 class="text-lg font-semibold text-[#1a1a2e]">Choose an exercise:</h3>
+                        <select id="exerciseSelect" class="bg-gray-800 border-2 border-gray-600 text-white p-3 rounded-lg shadow-md">
+                            <option value="shoulder_press">Shoulder Press</option>
+                            <option value="squats">Squats</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Chat Interface -->
+                <div id="chatContainer" class="w-96 bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+                    <div class="bg-[#1a1a2e] p-4">
+                        <h2 class="text-white text-lg font-semibold">SwoleMate Chat</h2>
+                    </div>
+                    <div id="chatMessages" class="flex-1 p-4 overflow-y-auto h-[400px] bg-gray-50">
+                        <!-- Messages will be added here -->
+                    </div>
+                    <div class="p-4 border-t border-gray-200">
+                        <div class="flex gap-2">
+                            <input type="text" id="messageInput" class="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500 text-gray-800" placeholder="Type your message...">
+                            <button id="sendMessage" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors">Send</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Coordinate Table -->
@@ -170,21 +271,6 @@
                 </table>
             </div>
 
-
-            <div class="flex space-x-4">
-                <button id="startButton" class="bg-green-500 text-white btn">Start Recording</button>
-                <button id="stopButton" disabled class="bg-red-500 text-white btn">Stop Recording</button>
-                <button id="saveButton" disabled class="bg-blue-500 text-white btn">Save Recording</button>
-            </div>
-
-            <div>
-                <h3 class="text-lg font-semibold text-[#1a1a2e]">Choose an exercise:</h3>
-                <select id="exerciseSelect" class="bg-gray-800 border-2 border-gray-600 text-white p-3 rounded-lg shadow-md">
-                    <option value="shoulder_press">Shoulder Press</option>
-                    <option value="squats">Squats</option>
-                </select>
-            </div>
-
             <div id="analysisResults">
                 <h3 class="text-lg font-semibold">Analysis Results</h3>
                 <div id="resultsList"></div>
@@ -198,6 +284,192 @@
             FilesetResolver,
             DrawingUtils
         } from "https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.0";
+
+        // Initialize chat functionality first
+        let chatFunctions = null;
+
+        function initializeChat() {
+            console.log('Initializing chat...');
+            
+            const chatMessages = document.getElementById('chatMessages');
+            const messageInput = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendMessage');
+            let chatHistory = [];
+
+            console.log('Chat elements:', {
+                chatMessages: chatMessages,
+                messageInput: messageInput,
+                sendButton: sendButton
+            });
+
+            if (!chatMessages || !messageInput || !sendButton) {
+                console.error('Some chat elements are missing:', {
+                    chatMessages: !!chatMessages,
+                    messageInput: !!messageInput,
+                    sendButton: !!sendButton
+                });
+                return;
+            }
+
+            function addMessage(message, isUser = false, isInitialResponse = false) {
+                console.log('Adding message:', message, 'isUser:', isUser, 'isInitialResponse:', isInitialResponse);
+                
+                let displayText = message;
+                if (isInitialResponse) {
+                    try {
+                        console.log('Attempting to parse initial response:', message);
+                        
+                        // Clean up the message string if needed
+                        let jsonString = message;
+                        if (typeof message === 'string') {
+                            // Remove any "JSON" prefix
+                            jsonString = message.replace(/^JSON\s*/, '').trim();
+                            // Remove backticks if present
+                            jsonString = jsonString.replace(/^```json\s*|^```|\s*```$/g, '').trim();
+                        }
+                        
+                        console.log('Cleaned JSON string:', jsonString);
+                        
+                        // Parse the JSON
+                        const jsonResponse = typeof jsonString === 'object' ? jsonString : JSON.parse(jsonString);
+                        console.log('Parsed JSON response:', jsonResponse);
+
+                        if (jsonResponse.user_advice) {
+                            let formattedText = jsonResponse.user_advice.introduction + '\n\n';
+                            
+                            // Process left side issues
+                            if (jsonResponse.user_advice.left_side) {
+                                formattedText += 'Left Side Issues:\n';
+                                for (const [part, data] of Object.entries(jsonResponse.user_advice.left_side)) {
+                                    if (data.status === "Needs Improvement" || data.status === "Needs Adjustment") {
+                                        formattedText += `• ${data.advice}\n`;
+                                        if (data.exercises) {
+                                            formattedText += '  Recommended exercises:\n';
+                                            data.exercises.forEach(exercise => {
+                                                if (exercise.youtube_example && !exercise.youtube_example.includes("general tip")) {
+                                                    formattedText += `  - ${exercise.name}: ${exercise.description}\n    Watch: ${exercise.youtube_example}\n`;
+                                                } else {
+                                                    formattedText += `  - ${exercise.name}: ${exercise.description}\n`;
+                                                }
+                                            });
+                                        }
+                                        formattedText += '\n';
+                                    }
+                                }
+                            }
+
+                            // Process right side issues
+                            if (jsonResponse.user_advice.right_side) {
+                                formattedText += 'Right Side Issues:\n';
+                                for (const [part, data] of Object.entries(jsonResponse.user_advice.right_side)) {
+                                    if (data.status === "Needs Improvement" || data.status === "Needs Adjustment") {
+                                        formattedText += `• ${data.advice}\n`;
+                                        if (data.exercises) {
+                                            formattedText += '  Recommended exercises:\n';
+                                            data.exercises.forEach(exercise => {
+                                                if (exercise.youtube_example && !exercise.youtube_example.includes("general tip")) {
+                                                    formattedText += `  - ${exercise.name}: ${exercise.description}\n    Watch: ${exercise.youtube_example}\n`;
+                                                } else {
+                                                    formattedText += `  - ${exercise.name}: ${exercise.description}\n`;
+                                                }
+                                            });
+                                        }
+                                        formattedText += '\n';
+                                    }
+                                }
+                            }
+
+                            // Add general advice
+                            formattedText += 'General Advice:\n';
+                            for (const [key, value] of Object.entries(jsonResponse.user_advice.general_advice)) {
+                                formattedText += `• ${value}\n`;
+                            }
+                            
+                            displayText = formattedText;
+                        } else {
+                            console.error('Invalid JSON structure:', jsonResponse);
+                            displayText = "The analysis is complete, but I couldn't format all the details. You can still ask me questions about your form!";
+                        }
+                    } catch (e) {
+                        console.error('Error processing initial response:', e);
+                        console.error('Raw message:', message);
+                        displayText = "The analysis is complete. While I couldn't format all the details, you can ask me specific questions about your form!";
+                    }
+                }
+
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `chat-message ${isUser ? 'chat-message-user' : 'chat-message-bot'}`;
+                
+                const bubble = document.createElement('div');
+                bubble.className = `message-bubble ${isUser ? 'message-bubble-user' : 'message-bubble-bot'}`;
+                
+                // Replace newlines with <br> tags and make links clickable
+                displayText = displayText.replace(/\n/g, '<br>').replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" class="text-blue-500 hover:underline">$1</a>');
+                bubble.innerHTML = displayText;
+                
+                messageDiv.appendChild(bubble);
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            function sendMessage() {
+                console.log('sendMessage called');
+                const message = messageInput.value.trim();
+                console.log('Message to send:', message);
+                
+                if (message) {
+                    addMessage(message, true);
+                    messageInput.value = '';
+
+                    // Send message to backend
+                    fetch('/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            message: message,
+                            history: chatHistory
+                        })
+                    })
+                    .then(response => {
+                        console.log('Response received:', response);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Data received:', data);
+                        addMessage(data.response);
+                        chatHistory.push({ role: "user", message: message });
+                        chatHistory.push({ role: "assistant", message: data.response });
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        addMessage('Sorry, there was an error processing your message.');
+                    });
+                }
+            }
+
+            // Add event listeners
+            sendButton.addEventListener('click', sendMessage);
+            messageInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    console.log('Enter key pressed');
+                    sendMessage();
+                }
+            });
+
+            // Add an initial message
+            addMessage('Welcome to SwoleMate! Record your exercise and I will analyze your form.');
+
+            return {
+                addMessage,
+                sendMessage,
+                chatHistory
+            };
+        }
+
+        // Initialize chat immediately
+        chatFunctions = initializeChat();
 
         const videoElement = document.getElementById('videoElement');
         const canvasElement = document.getElementById('output_canvas');
@@ -214,7 +486,7 @@
         let mediaRecorder = null;
         let recordedChunks = [];
         let frameCount = 0;
-        let isRecording = false; // Add this to control table updates
+        let isRecording = false;
         const maxFrames = 10;
 
         // Initialize pose landmarker
@@ -241,7 +513,7 @@
             canvasElement.height = videoElement.videoHeight;
         }
 
-        // Set up webcam
+        // Set up webcam and initialize mediaRecorder
         navigator.mediaDevices.getUserMedia({
             video: {
                 width: { ideal: 640 },
@@ -252,7 +524,7 @@
             videoElement.srcObject = stream;
             videoElement.onloadedmetadata = () => {
                 updateCanvasSize();
-                predictWebcam(); // Start pose detection immediately
+                predictWebcam();
             };
 
             mediaRecorder = new MediaRecorder(stream);
@@ -264,10 +536,8 @@
             };
 
             mediaRecorder.onstop = function() {
+                console.log('Recording stopped, processing video...');
                 const blob = new Blob(recordedChunks, { type: 'video/mp4' });
-                const videoURL = URL.createObjectURL(blob);
-                console.log("Recording complete. Video URL:", videoURL);
-
                 const formData = new FormData();
                 formData.append('video', blob, 'recorded_video.mp4');
 
@@ -275,16 +545,48 @@
                     method: 'POST',
                     body: formData
                 })
-                .then(response => {
-                    if (!response.ok) throw new Error('Failed to upload video');
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
-                    resultsList.innerHTML = ''; // Clear previous results
+                    console.log('Video analysis results:', data);
+                    resultsList.innerHTML = '';
 
                     if (data.error) {
                         resultsList.innerHTML = `<p class="text-red-500">${data.error}</p>`;
                     } else {
+                        // Process results and initialize chat
+                        let resultCodes = data.results.map(r => r.class).join(', ');
+                        console.log('Sending result codes to chat:', resultCodes);
+                        
+                        fetch('/initial_chat', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                codes: resultCodes
+                            })
+                        })
+                        .then(response => response.json())
+                        .then(chatData => {
+                            console.log('Initial chat response received:', chatData);
+                            console.log('Response type:', typeof chatData.response);
+                            console.log('Raw response:', chatData.response);
+                            
+                            if (chatFunctions) {
+                                // Pass the entire response object
+                                chatFunctions.addMessage(chatData.response, false, true);
+                            } else {
+                                console.error('Chat functions not initialized!');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error in initial chat:', error);
+                            if (chatFunctions) {
+                                chatFunctions.addMessage('I encountered an error while analyzing your form. Please try recording again or ask me specific questions about your exercise form.');
+                            }
+                        });
+
+                        // Display results as before
                         data.results.forEach(result => {
                             const resultItem = document.createElement('div');
                             resultItem.className = 'result-item';
@@ -296,7 +598,6 @@
                         });
                     }
 
-                    // Show the results container
                     analysisResults.style.display = 'block';
                 })
                 .catch(error => {

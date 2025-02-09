@@ -18,21 +18,135 @@ model = genai.GenerativeModel(
 )
 
 def initial_call(received_codes):
-  chat_session = model.start_chat(
-    history=[
-    ]
-  )
-  response = chat_session.send_message("You are serving as a gym advisor looking at data recieved from an AI model that uses mediapipe to determine whether a user is doing shoulder press correctly. It first uses 6 data points from mediapipe, which include data points 11, 13, 15 on the left and 12, 14, 16 on the right in order to count the number of reps, whether the reps were done correctly or not based on a metric from 0-6, where 0 means good form, 1 means to focus on left shoulder stability, 2 means left elbow angle needs to be adjusted (a value of the current degree will be provided with a goal of 90 degrees), 3 means that wrist needs to be straight, 4 means that right shoulder needs to be positioned better, 5 means right elbow angle needs to be adjusted (a value of the current degree will be provided with a goal of 90 degrees), and 6 that the right wrist is not straight. The user received score(s) of" + received_codes + ". Your goal is to look at the data points and advise the user on how they can essentially fix their form. Give advice based on the this data and use sources from the internet, including youtube videos to provide accurate and personalized advice. Provide this advice in the following JSON format. It is absolutely crucial that there is only the JSON object returned with absolutely no other text:\n{\n  \"user_advice\": {\n    \"introduction\": \"Based on the data, here's a personalized plan to improve your shoulder press form. We'll address individual issues and provide resources to help you visualize and correct them. Remember, consistent practice and attention to these details will lead to better results and reduce the risk of injury.\",\n    \"left_side\": {\n      \"shoulder_stability\": {\n        \"status\": \"Needs Improvement\",\n        \"issue_detected\": \"Left Shoulder Stability (Metric = 1)\",\n        \"advice\": \"Focus on engaging your left shoulder muscles throughout the entire movement. Imagine pinning your shoulder blade back and down against your ribcage. This will create a more stable base for the press.\",\n        \"exercises\": [\n          {\n            \"name\": \"Scapular Retractions\",\n            \"description\": \"Practice squeezing your shoulder blades together without shrugging your shoulders up. Hold for a few seconds and repeat.\",\n            \"youtube_example\": \"https://www.youtube.com/watch?v=kGf2tzJvO3o\"\n          },\n          {\n            \"name\": \"Band Pull-Aparts\",\n            \"description\": \"Using a resistance band, hold it with your hands shoulder-width apart. Pull the band apart while squeezing your shoulder blades together.\",\n            \"youtube_example\": \"https://www.youtube.com/watch?v=mGOkJaxlEGE\"\n          }\n        ],\n        \"priority\": \"High\"\n      },\n      \"elbow_angle\": {\n        \"status\": \"Needs Adjustment\",\n        \"issue_detected\": \"Left Elbow Angle (Metric = 2, Current Angle = [provided angle] degrees, Goal = 90 degrees)\",\n        \"advice\": \"Your left elbow angle needs to be closer to 90 degrees at the bottom of the press. This usually means lowering the weight further down.  Imagine your upper arm making a 45-degree angle with your torso, your elbow should be under your wrist when viewed from the side.  Monitor how far down you are pushing the weight to ensure you're not just pushing it halfway.\",\n        \"drills\": [\n          {\n            \"name\": \"Mirror Work\",\n            \"description\": \"Practice the movement in front of a mirror to visually monitor your elbow angle. Focus on achieving a 90-degree bend.\",\n            \"youtube_example\": \"This is a general tip and doesnt require a video.\"\n          },\n          {\n            \"name\": \"Controlled Descent\",\n            \"description\": \"Focus on slowly and deliberately lowering the weight, paying attention to your elbow angle.\",\n            \"youtube_example\": \"This is a general tip and doesnt require a video.\"\n          }\n        ],\n        \"priority\": \"High\"\n      },\n      \"wrist_alignment\": {\n        \"status\": \"Needs Adjustment\",\n        \"issue_detected\": \"Left Wrist Alignment (Metric = 3)\",\n        \"advice\": \"Keep your left wrist straight throughout the movement. Avoid any excessive bending or flexing. A straight wrist ensures the force is transferred directly through your forearm and shoulder, preventing strain. Grip the bar/dumbbell firmly but not excessively.\",\n        \"drills\": [\n          {\n            \"name\": \"Grip Check\",\n            \"description\": \"Before each rep, ensure you have a firm and balanced grip. The bar/dumbbell should sit comfortably in your hand.\",\n            \"youtube_example\": \"This is a general tip and doesnt require a video.\"\n          },\n          {\n            \"name\": \"Wrist Curls/Extensions\",\n            \"description\": \"Strengthening your wrist muscles can improve stability. Perform light wrist curls and extensions to build strength.\",\n            \"youtube_example\": \"https://www.youtube.com/watch?v=Bw-3gK1K60U\"\n          }\n        ],\n        \"priority\": \"Medium\"\n      }\n    },\n    \"right_side\": {\n      \"shoulder_position\": {\n        \"status\": \"Needs Improvement\",\n        \"issue_detected\": \"Right Shoulder Position (Metric = 4)\",\n        \"advice\": \"Ensure your right shoulder is properly positioned and not rounded forward or excessively shrugged. Similar to the left shoulder, engage your right shoulder muscles by pinning the shoulder blade back and down.\",\n        \"exercises\": [\n          {\n            \"name\": \"Wall Slides\",\n            \"description\": \"Stand with your back against a wall, arms bent at 90 degrees. Slide your arms up the wall, keeping your elbows and wrists in contact. This helps improve shoulder mobility and posture.\",\n            \"youtube_example\": \"https://www.youtube.com/watch?v=q6Ea5c8_HqU\"\n          },\n          {\n            \"name\": \"Face Pulls\",\n            \"description\": \"Using a resistance band, pull the band towards your face, focusing on squeezing your shoulder blades together.\",\n            \"youtube_example\": \"https://www.youtube.com/watch?v=mGOkJaxlEGE\"\n          }\n        ],\n        \"priority\": \"High\"\n      },\n      \"elbow_angle\": {\n        \"status\": \"Needs Adjustment\",\n        \"issue_detected\": \"Right Elbow Angle (Metric = 5, Current Angle = [provided angle] degrees, Goal = 90 degrees)\",\n        \"advice\": \"Your right elbow angle needs to be closer to 90 degrees at the bottom of the press. Like your left side, this means lowering the weight further. Focus on controlled descent and achieve the desired angle.\",\n        \"drills\": [\n          {\n            \"name\": \"Mirror Work\",\n            \"description\": \"Practice the movement in front of a mirror to visually monitor your elbow angle. Focus on achieving a 90-degree bend.\",\n            \"youtube_example\": \"This is a general tip and doesnt require a video.\"\n          },\n          {\n            \"name\": \"Controlled Descent\",\n            \"description\": \"Focus on slowly and deliberately lowering the weight, paying attention to your elbow angle.\",\n            \"youtube_example\": \"This is a general tip and doesnt require a video.\"\n          }\n        ],\n        \"priority\": \"High\"\n      },\n      \"wrist_alignment\": {\n        \"status\": \"Needs Adjustment\",\n        \"issue_detected\": \"Right Wrist Alignment (Metric = 6)\",\n        \"advice\": \"Maintain a straight right wrist throughout the exercise. Avoid any bending or flexing. This ensures proper force transmission and reduces the risk of wrist injury.\",\n        \"drills\": [\n          {\n            \"name\": \"Grip Check\",\n            \"description\": \"Before each rep, ensure a firm and balanced grip on the bar or dumbbell. The weight should sit comfortably in your hand.\",\n            \"youtube_example\": \"This is a general tip and doesnt require a video.\"\n          },\n          {\n            \"name\": \"Wrist Curls/Extensions\",\n            \"description\": \"Strengthening your wrist muscles can improve stability. Perform light wrist curls and extensions to build strength.\",\n            \"youtube_example\": \"https://www.youtube.com/watch?v=Bw-3gK1K60U\"\n          }\n        ],\n        \"priority\": \"Medium\"\n      }\n    },\n    \"general_advice\": {\n      \"warm_up\": \"Always start with a proper warm-up to prepare your shoulder muscles. Include dynamic stretches like arm circles and shoulder rotations.\",\n      \"weight_selection\": \"Use a weight that allows you to maintain good form throughout the entire set. If your form breaks down, reduce the weight.\",\n      \"core_engagement\": \"Engage your core muscles to provide stability and support during the exercise.\",\n      \"breathing\": \"Breathe in as you lower the weight and breathe out as you press it up.\",\n      \"consistency\": \"Consistency is key to improving your form. Focus on making small, incremental improvements over time.\",\n      \"professional_help\": \"Consider consulting with a qualified personal trainer or physical therapist for personalized guidance and assessment.\"\n    }\n  }\n}")
+    system_prompt = """You are SwoleMate, an AI fitness assistant analyzing shoulder press form. You have received data from an AI model that uses 6 key points from MediaPipe (points 11, 13, 15 on the left and 12, 14, 16 on the right) to assess shoulder press form.
 
-  return response.text
+The metrics are scored from 0-6, where:
+0: Perfect form
+1: Left shoulder stability needs work
+2: Left elbow angle needs adjustment (goal: 90°)
+3: Left wrist alignment needs correction
+4: Right shoulder position needs adjustment
+5: Right elbow angle needs correction (goal: 90°)
+6: Right wrist alignment needs work
+
+Based on the scores provided ({received_codes}), provide a detailed analysis and personalized advice. Format your response as a JSON object with the following structure, and ONLY return the JSON object with no additional text:
+
+{{
+    "user_advice": {{
+        "introduction": "A personalized introduction summarizing the analysis",
+        "left_side": {{
+            "shoulder": {{
+                "status": "Good/Needs Improvement/Needs Adjustment",
+                "issue_detected": "Description of the issue if any",
+                "advice": "Specific advice for improvement",
+                "exercises": [
+                    {{
+                        "name": "Exercise name",
+                        "description": "Brief description",
+                        "youtube_example": "URL or 'This is a general tip'"
+                    }}
+                ]
+            }},
+            "elbow": {{ ... }},
+            "wrist": {{ ... }}
+        }},
+        "right_side": {{
+            "shoulder": {{ ... }},
+            "elbow": {{ ... }},
+            "wrist": {{ ... }}
+        }},
+        "general_advice": {{
+            "warm_up": "Warm-up advice",
+            "weight_selection": "Weight selection guidance",
+            "breathing": "Breathing technique",
+            "core_engagement": "Core engagement tips",
+            "consistency": "Consistency advice",
+            "safety": "Safety considerations"
+        }}
+    }}
+}}"""
+
+    chat = model.start_chat(history=[])
+    response = chat.send_message(system_prompt)
+    return response.text
 
 def chat_call(user_query, history):
-  history.append({"role": "user", "message": user_query})
-  chat_session = model.start_chat(
-    history=history
-  )
+    # Create the system prompt
+    system_prompt = """You are SwoleMate, an AI fitness assistant specializing in shoulder press form analysis. 
+    You help users improve their exercise technique by providing detailed, personalized advice. Format your response as a JSON object with the following structure. The response should only be JSON and nothing else:
+    
+    {
+        "response": {
+            "message": "Your detailed response here",
+            "resources": [
+                {
+                    "type": "video/article/tip",
+                    "title": "Resource title",
+                    "description": "Brief description",
+                    "url": "URL if applicable"
+                }
+            ],
+            "key_points": [
+                "Key point 1",
+                "Key point 2",
+                "etc..."
+            ]
+        }
+    }
 
-  response = chat_session.send_message(user_query + ". Respond only in plain text, and add links if neccessary in order to support your claim.")
-  history.append({"role": "assistant", "message": response.text})
-
-  return response.text
+    When answering questions:
+    1. Be clear and concise
+    2. Use proper exercise terminology
+    3. Provide specific, actionable advice
+    4. Include relevant YouTube video links when appropriate
+    5. Focus on safety and proper form
+    6. Draw from your knowledge of shoulder press mechanics and common form issues"""
+    
+    # Format the conversation context from history
+    context = ""
+    if history:
+        for entry in history:
+            if entry.get('role') == 'user':
+                context += f"User: {entry.get('message', '')}\n"
+            elif entry.get('role') == 'assistant':
+                context += f"Assistant: {entry.get('message', '')}\n"
+    
+    # Combine everything into a single prompt
+    full_prompt = f"{system_prompt}\n\nPrevious conversation:\n{context}\nUser: {user_query}\nAssistant: Please provide your response in the specified JSON format."
+    
+    # Get response from the model
+    response = model.generate_content(full_prompt)
+    
+    try:
+        # Parse the JSON response
+        import json
+        # Remove markdown code block if present
+        cleaned_response = response.text.replace('```json', '').replace('```', '').strip()
+        response_json = json.loads(cleaned_response)
+        
+        # Format the response for display
+        formatted_response = response_json['response']['message']
+        # Convert markdown formatting to HTML
+        formatted_response = formatted_response.replace('**', '')  # Remove bold markdown
+        formatted_response = formatted_response.replace('\n\n', '<br><br>')  # Convert double newlines to HTML breaks
+        
+        # Add resources if they exist
+        if response_json['response'].get('resources'):
+            formatted_response += "\n\nResources:"
+            for resource in response_json['response']['resources']:
+                if resource.get('url'):
+                    formatted_response += f"\n• <b>{resource['title']}</b>: {resource['description']}\n  <a href='{resource['url']}' target='_blank'>{resource['url']}</a>"
+                else:
+                    formatted_response += f"\n• <b>{resource['title']}</b>: {resource['description']}"
+        
+        # Add key points if they exist
+        if response_json['response'].get('key_points'):
+            formatted_response += "\n\nKey Points:"
+            for point in response_json['response']['key_points']:
+                formatted_response += f"\n• {point}"
+        
+        return formatted_response
+    except json.JSONDecodeError as e:
+        print(f"JSON parsing error: {e}")
+        print(f"Raw response: {response.text}")
+        return "I apologize, but I encountered an error formatting the response. Please try asking your question again."

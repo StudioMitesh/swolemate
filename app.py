@@ -8,6 +8,7 @@ import tempfile
 import os
 from tensorflow.keras.models import load_model
 from pose_detector import extract_poses
+from llm_chat import initial_call, chat_call
 
 app = Flask(__name__)
 
@@ -104,6 +105,29 @@ def uploaded_file(filename):
 @app.route('/')
 def home():
     return render_template('index.html')
+
+@app.route('/initial_chat', methods=['POST'])
+def initial_chat():
+    try:
+        data = request.get_json()
+        codes = data.get('codes', '')
+        response = initial_call(codes)
+        return jsonify({'response': response})
+    except Exception as e:
+        print(f"Error in initial chat: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    try:
+        data = request.get_json()
+        message = data.get('message', '')
+        history = data.get('history', [])
+        response = chat_call(message, history)
+        return jsonify({'response': response})
+    except Exception as e:
+        print(f"Error in chat: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
