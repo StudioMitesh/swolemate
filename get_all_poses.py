@@ -1,3 +1,5 @@
+# NOT BEING USED
+
 import os
 from pose_detector import extract_poses
 import pandas as pd
@@ -9,7 +11,7 @@ def process_videos_in_folder(folder, label, output_csv):
         if filename.endswith(".mp4") or filename.endswith(".mov"):
             video_path = os.path.join(folder, filename)
             print(f"Processing: {video_path}")
-            df = extract_poses(video_path, label)
+            df = extract_poses(video_path)
             all_data.append(df)
 
     final_df = pd.concat(all_data, ignore_index=True)

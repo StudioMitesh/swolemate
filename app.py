@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, render_template, send_from_directory
 import numpy as np
+from sklearn.discriminant_analysis import StandardScaler
 import tensorflow as tf
 import cv2
 import io
@@ -14,64 +15,76 @@ UPLOAD_FOLDER = "uploads"
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-model = load_model('shoulder_press_model.keras')
+model = load_model('new_shoulder_press_model.keras')
 
-def process_video(video_path):
-    df = extract_poses(video_path, label=None)
-    print("df shape:", df.shape)
-    print(df.head())
-    if 'frame' in df.columns:
-        df = df.drop(columns=["frame"])
-    X = df.drop(columns=["label"]).values
-    sequence_length = 60
-    num_features = X.shape[1]
-    num_samples = X.shape[0] // sequence_length
-    if num_samples < 66:
-        print(f"Not enough frames. Only {num_samples} sequences available.")
-        return np.zeros((66, sequence_length, num_features)) 
-    X = X[:num_samples * sequence_length]
-    X = X.reshape(num_samples, sequence_length, num_features)
-    print("reshaped:", X.shape)
-    return X
+import mediapipe as mp
+import cv2
+import pandas as pd
+import numpy as np
+
+def save_temp_video(video_file):
+    if not video_file:
+        raise ValueError("No video file provided")
+    
+    video_path = os.path.join(app.config['UPLOAD_FOLDER'], 'temp_video.mp4')
+    video_file.save(video_path)
+    return video_path
 
 @app.route('/upload_video', methods=['POST'])
 def upload_video():
-    try: 
+    try:
         if 'video' not in request.files:
             return jsonify({'error': 'No video file provided'}), 400
 
         video_file = request.files['video']
         if video_file.filename == '':
             return jsonify({'error': 'No selected file'}), 400
-        video_filename = os.path.join(app.config['UPLOAD_FOLDER'], 'recorded_video.mp4')
-        print("Saving video to:", video_filename)
-        video_file.save(video_filename)
-        print("video file saved")
 
-        frames = process_video(video_filename)
-        print("Frames shape:", frames.shape)
-        
-        try:
-            print("Predicting...")
-            class_pred, error_pred = model.predict(frames)
-            print("predictions done!")
-            class_results = (class_pred > 0.5).astype(int)
-            error_results = np.argmax(error_pred, axis=1)
-            print("Predicted class:", class_results)
-            results =  {
-                'form_classification': class_results,
-                'error_types': error_results
-            }
-            return jsonify({
-                'classification': results['form_classification'].tolist(),
-                'error_types': results['error_types'].tolist()
-            })
-        except Exception as e:
-            print(f"Error occurred in model prediction: {e}")
-            return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+        # Save the video temporarily
+        video_path = save_temp_video(video_file)
+        print(f"Video saved to: {video_path}")
+
+        # Analyze the video
+        result = analyze_video(video_path)
+        return jsonify(result)
     except Exception as e:
         print(f"Error occurred: {e}")
         return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+
+@app.route('/analyze', methods=['POST'])
+def analyze_video(video_path):
+    video_path = os.path.join(app.config['UPLOAD_FOLDER'], 'good_sp3.mov')
+    rep_sequences = extract_poses(video_path)
+    
+    X = []
+    scaler = StandardScaler()
+    for seq in rep_sequences:
+        scaled = scaler.fit_transform(seq.drop(columns=['frame']))
+        padded = scaled[:60] if len(scaled) >=60 else np.pad(scaled, ((0,60-len(scaled)),(0,0)), mode='edge')
+        X.append(padded)
+    
+    predictions = model.predict(np.array(X))
+    error_classes = np.argmax(predictions, axis=1)
+    
+    feedback = []
+    class_mapping = {
+        0: "Good form!",
+        1: "Focus on left shoulder stability",
+        2: "Adjust left elbow angle (aim for 90°)",
+        3: "Keep left wrist straight",
+        4: "Fix right shoulder positioning",
+        5: "Right elbow flaring out",
+        6: "Right wrist bending excessively"
+    }
+    
+    for class_idx in error_classes:
+        feedback.append({
+            'class': int(class_idx),
+            'message': class_mapping[class_idx],
+            'confidence': float(predictions[0][class_idx])
+        })
+    
+    return jsonify({'results': feedback})
 
 
 @app.route('/uploads/<filename>')

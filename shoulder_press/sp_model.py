@@ -1,14 +1,84 @@
+import sys
+import os
 import numpy as np
 import pandas as pd
+from sklearn.discriminant_analysis import StandardScaler
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 from sklearn.model_selection import train_test_split
-import tensorflow
+from sklearn.utils import compute_class_weight
+import tensorflow as tf
 from tensorflow.keras.utils import to_categorical
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Conv1D, LSTM, Dense, Flatten, Dropout, BatchNormalization, concatenate
-from sp_error import compute_rep_error, assign_error_type
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.layers import Input, Conv1D, LSTM, Dense, Flatten, Dropout, BatchNormalization, Bidirectional, Attention, concatenate
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from pose_detector import extract_poses
+from sp_error import classify_errors, assign_error_type
+import glob
+import matplotlib.pyplot as plt
+
 
 # getting the data
-good_df = pd.read_csv("good_shoulder_press.csv")
+
+def prepare_dataset(good_dir, bad_dir):
+    X_good, y_good = process_folder(good_dir, is_good=True)
+    X_bad, y_bad = process_folder(bad_dir, is_good=False)
+    
+    X = np.concatenate([X_good, X_bad])
+    y = np.concatenate([y_good, y_bad])
+    
+    return X, y
+
+def process_folder(folder_path, is_good):
+    sequences = []
+    labels = []
+    
+    reference_angles = {'elbow': 90, 'shoulder': 80}
+    thresholds = {
+        'left_shoulder': 0.15, 'right_shoulder': 0.15,
+        'left_elbow': 20, 'right_elbow': 20,
+        'left_wrist': 0.1, 'right_wrist': 0.1,
+        'left_wrist_orientation': 0.1, 'right_wrist_orientation': 0.1,
+        'left_shoulder_angle': 0.1, 'right_shoulder_angle': 0.1,
+        'left_depth': 0.1, 'right_depth': 0.1
+    }
+    allowed_extensions = {'.mov', '.mp4'}
+
+    for video_file in os.listdir(folder_path):
+        file_extension = os.path.splitext(video_file)[1].lower()
+        if file_extension not in allowed_extensions:
+            continue
+        video_path = os.path.join(folder_path, video_file)
+        rep_sequences = extract_poses(video_path)
+        
+        for seq in rep_sequences:
+            seq_data = seq.drop(columns=['frame']).values
+            
+            if len(seq_data) < 60:
+                padded = np.pad(seq_data, ((0, 60-len(seq_data)), (0,0)), mode='edge')
+            else:
+                padded = seq_data[:60]
+            
+            if is_good:
+                labels.append(0)
+            else:
+                errors = classify_errors(padded, reference_angles, thresholds)
+                error_class = assign_error_type(errors, thresholds)
+                labels.append(error_class)
+            
+            sequences.append(padded)
+    
+    return np.array(sequences), np.array(labels)
+
+
+
+
+
+X, y = prepare_dataset(
+    "pose_data/good_shoulder_press",
+    "pose_data/bad_shoulder_press"
+)
+
+"""good_df = pd.read_csv("good_shoulder_press.csv")
 bad_df = pd.read_csv("bad_shoulder_press.csv")
 
 good_df["label"] = 1 
@@ -24,22 +94,16 @@ print(df.head())
 
 X = df.drop(columns=["label", "error_type"]).values
 print("Original shape:", X.shape)
-y_class = df["label"].values
+y_class = df["label"].values"""
 
-# features for input data
-sequence_length = 60 # sequence length we are using is 2 times our FPS frame rate rn (2 * 30 fps)
-num_features = X.shape[1]
-num_samples = X.shape[0] // sequence_length
-X = X[:num_samples * sequence_length]
-X = X.reshape(num_samples, sequence_length, num_features)
-print("Reshaped shape:", X.shape)
+scaler = StandardScaler()
+X = np.array([scaler.fit_transform(seq) for seq in X])
 
-y_class = df["label"].values[:num_samples * sequence_length]
-y_class_seq = y_class.reshape(num_samples, sequence_length)
-y_class_seq = np.array([np.bincount(seq).argmax() for seq in y_class_seq])
-y_class_seq = y_class_seq.reshape(-1, 1)
 
-# the error threshold values stuff
+print("X shape:", X.shape)
+num_samples, sequence_length, num_features = X.shape
+
+"""# the error threshold values stuff
 
 thresholds = {
     'angle': 30.0,             # elbow angle in degrees
@@ -85,83 +149,86 @@ for i in range(num_samples):
                                    right_threshold=0.5)
     error_labels.append(error_type)
     aggregated_errors_list.append(aggregated_errors)
-error_labels = np.array(error_labels)
-num_error_classes = 4
-y_error = to_categorical(error_labels, num_classes=num_error_classes)
-
+error_labels = np.array(error_labels)"""
+num_classes = 7
+y = to_categorical(y, num_classes=num_classes)
 
 # train test split data
-X_train, X_test, y_class_train, y_class_test, y_error_train, y_error_test = train_test_split(
-    X, y_class_seq, y_error, test_size=0.3, random_state=42
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42
 )
-
-# the model
-
-input_layer = Input(shape=(sequence_length, num_features))
-
-
-# cnn model
-'''
-first a 1 dimensional convolutional layer
-second a batch normalization layer
-third another 1 dimensional with double dimension convolutional layer
-fourth another batch normalization layer
-fifth flatten the output
-'''
-
-cnn_layer = Conv1D(filters=64, kernel_size=3, activation='relu', padding='same')(input_layer)
-cnn_layer = BatchNormalization()(cnn_layer)
-cnn_layer = Conv1D(filters=128, kernel_size=3, activation='relu', padding='same')(cnn_layer)
-cnn_layer = BatchNormalization()(cnn_layer)
-cnn_layer = Flatten()(cnn_layer)
 
 # lstm model
-'''
-first a 128 unit lstm layer
-then another 64 unit lstm layer
-'''
 
-lstm_layer = LSTM(128, return_sequences=True)(input_layer)
-lstm_layer = LSTM(64)(lstm_layer)
-
-# merge the cnn and lstm models together
-merged = concatenate([cnn_layer, lstm_layer])
-# add dropout layer w 0.5 rate so that we remove overfitting
-merged = Dropout(0.5)(merged)
-
-# rn its a sigmoid activation function for the classes output layer
-class_output = Dense(1, activation="sigmoid", name="class_output")(merged)
-
-# rn its a softmax activation for the error output
-error_output = Dense(num_error_classes, activation="softmax", name="error_output")(merged)
-
-# creation of the model
-model = Model(inputs=input_layer, outputs=[class_output, error_output])
+model = Sequential([
+    LSTM(128, input_shape=(sequence_length, num_features), return_sequences=True),
+    Dropout(0.3),
+    LSTM(64),
+    Dropout(0.2),
+    Dense(32, activation='relu'),
+    Dense(num_classes, activation='softmax')  # num_classes = good form + error types
+])
 
 # compile the model w adam optimizer, binary crossentropy loss for class output, and categorical crossentropy loss for error output
-model.compile(
-    optimizer="adam",
-    loss={"class_output": "binary_crossentropy", "error_output": "categorical_crossentropy"},
-    metrics={"class_output": "accuracy", "error_output": "accuracy"}
-)
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
 model.summary()
 
 
 # train the model
-model.fit(
-    X_train,
-    {"class_output": y_class_train, "error_output": y_error_train},
-    epochs=10,
-    batch_size=32
+history = model.fit(
+    X_train, y_train,
+    epochs=50,
+    batch_size=32,
+    validation_data=(X_test, y_test)
+    #class_weight=compute_class_weight('balanced', classes=np.unique(np.argmax(y, axis=1)), y=np.argmax(y, axis=1))
 )
-
-# evaluate the model
-results = model.evaluate(
-    X_test,
-    {"class_output": y_class_test, "error_output": y_error_test},
-    batch_size=32
-)
-print("Test results:", results)
 
 # save the model
-model.save("shoulder_press_model.keras")
+model.save("new_shoulder_press_model.keras")
+
+# evaluate the model
+y_pred = np.argmax(model.predict(X_test), axis=1)
+y_true = np.argmax(y_test, axis=1)
+
+
+# metrics for the model eval
+print("Classification Report:")
+print(classification_report(y_true, y_pred, target_names=[
+    "Good form", "Left shoulder", "Left elbow", "Left wrist",
+    "Right shoulder", "Right elbow", "Right wrist"
+]))
+
+print("Confusion Matrix:")
+conf_matrix = confusion_matrix(y_true, y_pred)
+print(conf_matrix)
+
+roc_auc = roc_auc_score(y_test, model.predict(X_test), multi_class='ovr')
+print(f"ROC-AUC Score: {roc_auc:.4f}")
+
+
+# visualization if we want
+"""
+plt.figure(figsize=(12, 5))
+
+# Plot loss
+plt.subplot(1, 2, 1)
+plt.plot(history.history['loss'], label='Training Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.title('Loss Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+
+# Plot accuracy
+plt.subplot(1, 2, 2)
+plt.plot(history.history['accuracy'], label='Training Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+plt.title('Accuracy Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+"""

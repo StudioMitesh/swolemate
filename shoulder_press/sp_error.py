@@ -163,9 +163,16 @@ def compute_rep_error(seq, reference_pose, thresholds, weights):
     return composite_error, aggregated_errors
 
 # assignment of a discrete label of a rep based on the error
-def assign_error_type(aggregated_errors, left_threshold=0.5, right_threshold=0.5):
+def assign_error_type(aggregated_errors, thresholds):
     '''
+    Return error type based on whether the aggregated errors exceed the thresholds.
     0 = good form, the errors don't exceed the thresholds
+    1 = left error exceeds, right is good
+    2 = right error exceeds, left is good
+    3 = both left and right errors exceed
+    4 = only left wrist error exceeds
+    5 = only right wrist error exceeds
+    6 = both wrist errors exceed
     '''
     left_keys = ['left_elbow', 'left_shoulder', 'left_wrist_orientation', 'left_shoulder_angle', 'left_depth']
     right_keys = ['right_elbow', 'right_shoulder', 'right_wrist_orientation', 'right_shoulder_angle', 'right_depth']
@@ -173,14 +180,31 @@ def assign_error_type(aggregated_errors, left_threshold=0.5, right_threshold=0.5
     left_error = sum(aggregated_errors.get(k, 0.0) for k in left_keys)
     right_error = sum(aggregated_errors.get(k, 0.0) for k in right_keys)
 
-    if left_error < left_threshold and right_error < right_threshold:
-        return 0
-    elif left_error >= left_threshold and right_error < right_threshold:
-        return 1
-    elif left_error < left_threshold and right_error >= right_threshold:
-        return 2
-    elif left_error >= left_threshold and right_error >= right_threshold:
-        return 3
-    return 0
+    left_threshold = sum(thresholds.get(k, 0.0) for k in left_keys)
+    right_threshold = sum(thresholds.get(k, 0.0) for k in right_keys)
 
+    left_exceeds = left_error >= left_threshold
+    right_exceeds = right_error >= right_threshold
 
+    if not left_exceeds and not right_exceeds:
+        return 0  # good form
+    elif left_exceeds and not right_exceeds:
+        return 1  # left error exceeds
+    elif not left_exceeds and right_exceeds:
+        return 2  # right error exceeds
+    elif left_exceeds and right_exceeds:
+        return 3  # both errors exceed
+    
+    left_wrist_error = aggregated_errors.get('left_wrist', 0.0)
+    right_wrist_error = aggregated_errors.get('right_wrist', 0.0)
+    left_wrist_threshold = thresholds.get('left_wrist', 0.0)
+    right_wrist_threshold = thresholds.get('right_wrist', 0.0)
+
+    if left_wrist_error >= left_wrist_threshold and right_wrist_error < right_wrist_threshold:
+        return 4  # only left wrist error exceeds
+    elif right_wrist_error >= right_wrist_threshold and left_wrist_error < left_wrist_threshold:
+        return 5  # only right wrist error exceeds
+    elif left_wrist_error >= left_wrist_threshold and right_wrist_error >= right_wrist_threshold:
+        return 6  # both wrist errors exceed
+
+    return 0 
