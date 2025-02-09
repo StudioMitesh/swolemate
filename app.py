@@ -51,10 +51,11 @@ def upload_video():
         print(f"Error occurred: {e}")
         return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
 
-@app.route('/analyze', methods=['POST'])
 def analyze_video(video_path):
-    video_path = os.path.join(app.config['UPLOAD_FOLDER'], 'good_sp3.mov')
+    video_path = os.path.join(app.config['UPLOAD_FOLDER'], 'bad_sp3.mov')
     rep_sequences = extract_poses(video_path)
+    if len(rep_sequences) == 0:
+        return {'error': 'No pose data detected'}
     
     X = []
     scaler = StandardScaler()
@@ -63,7 +64,16 @@ def analyze_video(video_path):
         padded = scaled[:60] if len(scaled) >=60 else np.pad(scaled, ((0,60-len(scaled)),(0,0)), mode='edge')
         X.append(padded)
     
+    X = np.array(X)
+    print(f"Processed input shape: {X.shape}")  
+    print(f"First row of input data:\n{X[0]}")
+    
+    test_input = np.random.randn(1, 60, X.shape[-1])  # Random data
+    pred_test = model.predict(test_input)
+    print(f"Prediction on random data: {pred_test}")
+
     predictions = model.predict(np.array(X))
+    print(f"Predictions:\n{predictions}")
     error_classes = np.argmax(predictions, axis=1)
     
     feedback = []
@@ -84,7 +94,7 @@ def analyze_video(video_path):
             'confidence': float(predictions[0][class_idx])
         })
     
-    return jsonify({'results': feedback})
+    return {'results': feedback}
 
 
 @app.route('/uploads/<filename>')

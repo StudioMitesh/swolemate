@@ -5,44 +5,39 @@ import pandas as pd
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 from sklearn.model_selection import train_test_split
-from sklearn.utils import compute_class_weight
+from sklearn.utils.class_weight import compute_class_weight
 import tensorflow as tf
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.layers import Input, Conv1D, LSTM, Dense, Flatten, Dropout, BatchNormalization, Bidirectional, Attention, concatenate
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from pose_detector import extract_poses
-from sp_error import classify_errors, assign_error_type
+from sp_error import compute_rep_error, assign_error_type
 import glob
 import matplotlib.pyplot as plt
 
 
+NUM_CLASSES = 7
 # getting the data
 
-def prepare_dataset(good_dir, bad_dir):
-    X_good, y_good = process_folder(good_dir, is_good=True)
-    X_bad, y_bad = process_folder(bad_dir, is_good=False)
+def prepare_dataset(folders):
+    X = []
+    y = []
     
-    X = np.concatenate([X_good, X_bad])
-    y = np.concatenate([y_good, y_bad])
+    for label, folder in enumerate(folders):
+        sequences, labels = process_folder(folder, label)
+        X.extend(sequences)
+        y.extend(labels)
     
-    return X, y
+    return np.array(X), np.array(y)
 
-def process_folder(folder_path, is_good):
+
+def process_folder(folder_path, label):
     sequences = []
     labels = []
     
-    reference_angles = {'elbow': 90, 'shoulder': 80}
-    thresholds = {
-        'left_shoulder': 0.15, 'right_shoulder': 0.15,
-        'left_elbow': 20, 'right_elbow': 20,
-        'left_wrist': 0.1, 'right_wrist': 0.1,
-        'left_wrist_orientation': 0.1, 'right_wrist_orientation': 0.1,
-        'left_shoulder_angle': 0.1, 'right_shoulder_angle': 0.1,
-        'left_depth': 0.1, 'right_depth': 0.1
-    }
     allowed_extensions = {'.mov', '.mp4'}
-
+    
     for video_file in os.listdir(folder_path):
         file_extension = os.path.splitext(video_file)[1].lower()
         if file_extension not in allowed_extensions:
@@ -54,29 +49,31 @@ def process_folder(folder_path, is_good):
             seq_data = seq.drop(columns=['frame']).values
             
             if len(seq_data) < 60:
-                padded = np.pad(seq_data, ((0, 60-len(seq_data)), (0,0)), mode='edge')
+                padded = np.pad(seq_data, ((0, 60-len(seq_data)), (0, 0)), mode='edge')
             else:
                 padded = seq_data[:60]
             
-            if is_good:
-                labels.append(0)
-            else:
-                errors = classify_errors(padded, reference_angles, thresholds)
-                error_class = assign_error_type(errors, thresholds)
-                labels.append(error_class)
-            
+            labels.append(label)
             sequences.append(padded)
     
-    return np.array(sequences), np.array(labels)
+    return sequences, labels
 
+folders = [
+    "pose_data/good_shoulder_press",  # Label 0
+    "pose_data/left_shoulder_error",  # Label 1
+    "pose_data/left_elbow_error",     # Label 2
+    "pose_data/left_wrist_error",     # Label 3
+    "pose_data/right_shoulder_error", # Label 4
+    "pose_data/right_elbow_error",    # Label 5
+    "pose_data/right_wrist_error"     # Label 6
+]
 
+def add_noise(X, y, noise_level=0.01):
+    noise = np.random.normal(loc=0.0, scale=noise_level, size=X.shape)
+    X_noisy = X + noise * (y.argmax(axis=1) != 0).reshape(-1, 1, 1)
+    return np.clip(X_noisy, -1, 1)
 
-
-
-X, y = prepare_dataset(
-    "pose_data/good_shoulder_press",
-    "pose_data/bad_shoulder_press"
-)
+X, y = prepare_dataset(folders)
 
 """good_df = pd.read_csv("good_shoulder_press.csv")
 bad_df = pd.read_csv("bad_shoulder_press.csv")
@@ -151,12 +148,23 @@ for i in range(num_samples):
     aggregated_errors_list.append(aggregated_errors)
 error_labels = np.array(error_labels)"""
 num_classes = 7
-y = to_categorical(y, num_classes=num_classes)
+y = to_categorical(y, num_classes=NUM_CLASSES)
 
 # train test split data
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.3, random_state=42
 )
+
+y_labels = np.argmax(y, axis=1)
+class_weights = compute_class_weight(class_weight="balanced", classes=np.unique(y_labels), y=y_labels)
+class_weights_dict = {i: class_weights[i] for i in range(len(class_weights))}
+print(f"Class weights: {class_weights_dict}")
+
+#X_train = add_noise(X_train, y_train, noise_level=0.005)
+
+unique, counts = np.unique(y.argmax(axis=1), return_counts=True)
+print("Class distribution:", dict(zip(unique, counts)))
+
 
 # lstm model
 
@@ -166,11 +174,19 @@ model = Sequential([
     LSTM(64),
     Dropout(0.2),
     Dense(32, activation='relu'),
-    Dense(num_classes, activation='softmax')  # num_classes = good form + error types
+    Dense(num_classes, activation='sigmoid')  # should be 7 different binary classes
 ])
 
+learning_rate = 0.001
+optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+
 # compile the model w adam optimizer, binary crossentropy loss for class output, and categorical crossentropy loss for error output
-model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+model.compile(
+    optimizer=optimizer,
+    loss="categorical_crossentropy",
+    metrics=['accuracy']
+)
+
 
 model.summary()
 
@@ -178,10 +194,10 @@ model.summary()
 # train the model
 history = model.fit(
     X_train, y_train,
-    epochs=50,
+    epochs=20,
     batch_size=32,
-    validation_data=(X_test, y_test)
-    #class_weight=compute_class_weight('balanced', classes=np.unique(np.argmax(y, axis=1)), y=np.argmax(y, axis=1))
+    validation_data=(X_test, y_test),
+    class_weight=class_weights_dict
 )
 
 # save the model
@@ -205,6 +221,36 @@ print(conf_matrix)
 
 roc_auc = roc_auc_score(y_test, model.predict(X_test), multi_class='ovr')
 print(f"ROC-AUC Score: {roc_auc:.4f}")
+
+
+# reinforcement learning if we want to include
+def choose_action(state):
+    state = np.expand_dims(state, axis=0)
+    action_probs = model.predict(state)[0]
+    action = np.argmax(action_probs)
+    return action, action_probs
+
+def train_with_reinforcement_learning(X_train, y_train, epochs=10, batch_size=32):
+    for epoch in range(epochs):
+        for step in range(len(X_train) // batch_size):
+            batch_x = X_train[step * batch_size: (step + 1) * batch_size]
+            batch_y = y_train[step * batch_size: (step + 1) * batch_size]
+            
+            actions, action_probs = choose_action(batch_x)
+            
+            reward = np.array([1 if actions[i] == np.argmax(batch_y[i]) else -1 for i in range(batch_size)])
+            
+            with tf.GradientTape() as tape:
+                log_prob = tf.reduce_sum(tf.math.log(action_probs) * batch_y, axis=1)
+                loss = -tf.reduce_mean(log_prob * reward)
+                
+            gradients = tape.gradient(loss, model.trainable_variables)
+            model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+            
+            print(f"Epoch: {epoch+1}/{epochs}, Step: {step+1}/{len(X_train)//batch_size}, Loss: {loss.numpy()}")
+
+#train_with_reinforcement_learning(X_train, y_train, epochs=10, batch_size=32)
+
 
 
 # visualization if we want

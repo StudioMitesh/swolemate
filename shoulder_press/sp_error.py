@@ -13,7 +13,7 @@ def euclidean_distance(a, b):
     return np.linalg.norm(np.array(a) - np.array(b))
 
 def normalize_error(error_value, max_error):
-    return min(error_value / max_error, 1.0)
+    return min(error_value / (max_error * 0.5), 1.0)
 
 def angle_with_vertical(vector):
     vertical = np.array([0, 1, 0])
@@ -148,24 +148,33 @@ def compute_rep_error(seq, reference_pose, thresholds, weights):
         'left_depth', 'right_depth'
     ]
     aggregated_errors = {key: 0.0 for key in metric_keys}
-    
+    triggered_errors = {}
+
     for frame in seq:
         frame_pose = parse_frame(frame)
         errors = classify_errors(frame_pose, reference_pose, thresholds)
+
         for key in metric_keys:
             aggregated_errors[key] += errors.get(key, 0.0)
+            
+            if errors.get(key, 0.0) > thresholds.get(key, 0.0):
+                triggered_errors[key] = errors[key]
+
     for key in aggregated_errors:
         aggregated_errors[key] /= num_frames
 
     composite_error = 0.0
     for key, err in aggregated_errors.items():
         composite_error += weights.get(key, 0.0) * err
-    return composite_error, aggregated_errors
 
-# assignment of a discrete label of a rep based on the error
-def assign_error_type(aggregated_errors, thresholds):
+    return composite_error, aggregated_errors, triggered_errors
+
+
+def assign_error_type(composite_error, aggregated_errors, triggered_errors):
     '''
-    Return error type based on whether the aggregated errors exceed the thresholds.
+    Return error type based on whether the aggregated errors exceed the thresholds
+    and whether the composite error is sufficiently high to indicate poor form.
+    
     0 = good form, the errors don't exceed the thresholds
     1 = left error exceeds, right is good
     2 = right error exceeds, left is good
@@ -174,37 +183,33 @@ def assign_error_type(aggregated_errors, thresholds):
     5 = only right wrist error exceeds
     6 = both wrist errors exceed
     '''
-    left_keys = ['left_elbow', 'left_shoulder', 'left_wrist_orientation', 'left_shoulder_angle', 'left_depth']
-    right_keys = ['right_elbow', 'right_shoulder', 'right_wrist_orientation', 'right_shoulder_angle', 'right_depth']
-
-    left_error = sum(aggregated_errors.get(k, 0.0) for k in left_keys)
-    right_error = sum(aggregated_errors.get(k, 0.0) for k in right_keys)
-
-    left_threshold = sum(thresholds.get(k, 0.0) for k in left_keys)
-    right_threshold = sum(thresholds.get(k, 0.0) for k in right_keys)
-
-    left_exceeds = left_error >= left_threshold
-    right_exceeds = right_error >= right_threshold
-
-    if not left_exceeds and not right_exceeds:
-        return 0  # good form
-    elif left_exceeds and not right_exceeds:
-        return 1  # left error exceeds
-    elif not left_exceeds and right_exceeds:
-        return 2  # right error exceeds
-    elif left_exceeds and right_exceeds:
-        return 3  # both errors exceed
+    print("Composite error:", composite_error, "Aggregated errors:", aggregated_errors, "Triggered errors:", triggered_errors)
+    # Define the error types for each metric
+    error_types = {
+        'left_shoulder': 1,
+        'left_elbow': 2,
+        'left_wrist_orientation': 3,
+        'right_shoulder': 4, 
+        'right_elbow': 5,
+        'right_wrist_orientation': 6
+    }
     
-    left_wrist_error = aggregated_errors.get('left_wrist', 0.0)
-    right_wrist_error = aggregated_errors.get('right_wrist', 0.0)
-    left_wrist_threshold = thresholds.get('left_wrist', 0.0)
-    right_wrist_threshold = thresholds.get('right_wrist', 0.0)
+    labels = []
 
-    if left_wrist_error >= left_wrist_threshold and right_wrist_error < right_wrist_threshold:
-        return 4  # only left wrist error exceeds
-    elif right_wrist_error >= right_wrist_threshold and left_wrist_error < left_wrist_threshold:
-        return 5  # only right wrist error exceeds
-    elif left_wrist_error >= left_wrist_threshold and right_wrist_error >= right_wrist_threshold:
-        return 6  # both wrist errors exceed
-
-    return 0 
+    if composite_error > 1.5:  
+        left_errors = {key: aggregated_errors[key] for key in ['left_shoulder', 'left_elbow', 'left_wrist_orientation'] if key in triggered_errors}
+        right_errors = {key: aggregated_errors[key] for key in ['right_shoulder', 'right_elbow', 'right_wrist_orientation'] if key in triggered_errors}
+        
+        if "left_shoulder" in triggered_errors:
+            labels.append(1)
+        if "left_elbow" in triggered_errors:
+            labels.append(2)
+        if "left_wrist_orientation" in triggered_errors:
+            labels.append(3)
+        if "right_shoulder" in triggered_errors:
+            labels.append(4)
+        if "right_elbow" in triggered_errors:
+            labels.append(5)
+        if "right_wrist_orientation" in triggered_errors:
+            labels.append(6)
+    return labels
